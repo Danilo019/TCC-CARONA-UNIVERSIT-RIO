@@ -1,0 +1,75 @@
+name: app_carona_novo
+description: Aplicativo Flutter para login, cadastro e caronas.
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.9.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  email_validator: ^2.0.1
+  flutter_native_splash: ^2.4.1
+  image_picker: ^1.1.2
+  http: ^1.2.2
+  # permission_handler: ^11.3.1
+  # google_maps_flutter: ^2.10.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.13.1
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+
+  fonts:
+    - family: NotoSerif
+      fonts:
+        - asset: assets/fonts/NotoSerif-Regular.ttf
+        - asset: assets/fonts/NotoSerif-Bold.ttf
+          weight: 700
+
+flutter_native_splash:
+  # === CORES ===
+  color_android: "#42a5f5"
+  color_dark_android: "#042a49"
+  color_ios: "#42a5f5"
+  color_dark_ios: "#042a49"
+  color_web: "#42a5f5"
+  color_dark_web: "#042a49"
+
+  # === IMAGENS PRINCIPAIS ===
+  image_android: assets/images/inco_az.png
+  image_ios: assets/images/inco_az.png
+
+  # === BACKGROUND PERSONALIZADO ===
+  background_image_android: assets/images/background_android.png
+  background_image_ios: assets/images/background_ios.png
+
+  # === BRANDING (logo pequena embaixo) ===
+  branding_android: assets/images/brand_android.png
+  branding_bottom_padding_android: 24
+  branding_ios: assets/images/brand_ios.png
+  branding_bottom_padding_ios: 24
+
+  # === OUTROS ===
+  android: true
+  ios: true
+  web: false
+  android_gravity: center
+  ios_content_mode: scaleAspectFill
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/images/inco_az.png
+  adaptive_icon_background: "#ffffff"
+  adaptive_icon_foreground: assets/images/icone_transp.png
