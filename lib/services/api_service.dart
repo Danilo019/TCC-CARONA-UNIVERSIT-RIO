@@ -2,30 +2,57 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  final String _baseUrl = 'http://localhost:8080/api'; // TODO: Substituir pela URL real do seu backend
+  // A base URL agora é configurável via construtor. Passe a URL do seu backend
+  // ao criar uma instância de ApiService. O valor padrão é localhost para
+  // facilitar desenvolvimento local.
+  final String _baseUrl;
+
+  ApiService({String? baseUrl}) : _baseUrl = baseUrl ?? 'http://localhost:8080/api';
 
   Future<Map<String, dynamic>> get(String endpoint) async {
-    final response = await http.get(Uri.parse('$_baseUrl/$endpoint'));
+    final uri = Uri.parse('$_baseUrl/$endpoint');
+    final response = await http.get(uri);
     if (response.statusCode == 200) {
-      return json.decode(response.body);
+      return json.decode(response.body) as Map<String, dynamic>;
     } else {
-      throw Exception('Failed to load data from $endpoint');
+      throw Exception('GET $uri failed: ${response.statusCode} ${response.reasonPhrase}');
     }
   }
 
   Future<Map<String, dynamic>> post(String endpoint, Map<String, dynamic> data) async {
+    final uri = Uri.parse('$_baseUrl/$endpoint');
     final response = await http.post(
-      Uri.parse('$_baseUrl/$endpoint'),
+      uri,
       headers: {'Content-Type': 'application/json'},
       body: json.encode(data),
     );
-    if (response.statusCode == 201) {
-      return json.decode(response.body);
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return json.decode(response.body) as Map<String, dynamic>;
     } else {
-      throw Exception('Failed to post data to $endpoint');
+      throw Exception('POST $uri failed: ${response.statusCode} ${response.reasonPhrase}');
     }
   }
 
-  // Adicione outros métodos HTTP (put, delete) conforme necessário
+  Future<Map<String, dynamic>> put(String endpoint, Map<String, dynamic> data) async {
+    final uri = Uri.parse('$_baseUrl/$endpoint');
+    final response = await http.put(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode(data),
+    );
+    if (response.statusCode == 200) {
+      return json.decode(response.body) as Map<String, dynamic>;
+    } else {
+      throw Exception('PUT $uri failed: ${response.statusCode} ${response.reasonPhrase}');
+    }
+  }
+
+  Future<void> delete(String endpoint) async {
+    final uri = Uri.parse('$_baseUrl/$endpoint');
+    final response = await http.delete(uri);
+    if (response.statusCode != 200 && response.statusCode != 204) {
+      throw Exception('DELETE $uri failed: ${response.statusCode} ${response.reasonPhrase}');
+    }
+  }
 }
 

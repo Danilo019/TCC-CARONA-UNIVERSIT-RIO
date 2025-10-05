@@ -8,7 +8,7 @@ import 'package:app_carona_novo/components/signup_page.dart';
 import 'package:email_validator/email_validator.dart';
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({Key? key}) : super(key: key);
+  const LoginPage({super.key});
 
   @override
   State<LoginPage> createState() => _LoginPageState();

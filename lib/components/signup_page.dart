@@ -10,8 +10,9 @@ import 'package:app_carona_novo/components/common/page_heading.dart';
 import 'package:app_carona_novo/components/login_page.dart';
 
 class SignupPage extends StatefulWidget {
-  const SignupPage({Key? key}) : super(key: key);
+  const SignupPage({super.key});
 
+  @override
   @override
   State<SignupPage> createState() => _SignupPageState();
 }

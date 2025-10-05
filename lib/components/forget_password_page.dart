@@ -6,7 +6,7 @@ import 'package:app_carona_novo/components/common/page_heading.dart';
 import 'package:app_carona_novo/components/common/custom_input_field.dart';
 
 class ForgetPasswordPage extends StatefulWidget {
-  const ForgetPasswordPage({Key? key}) : super(key: key);
+  const ForgetPasswordPage({super.key});
 
   @override
   State<ForgetPasswordPage> createState() => _ForgetPasswordPageState();
