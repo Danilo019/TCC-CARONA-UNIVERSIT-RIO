@@ -30,6 +30,20 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Microsoft Authentication Activity -->
+        <activity
+            android:name="com.microsoft.identity.client.BrowserTabActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="msauth"
+                    android:host="com.carona.universitaria"
+                    android:path="/df/WrQM67qwAZFa/4i5uTORfZgI=" />
+            </intent-filter>
+        </activity>
     </application>
     <!-- Necessário para consultar atividades que podem processar texto, veja:
          https://developer.android.com/training/package-visibility and

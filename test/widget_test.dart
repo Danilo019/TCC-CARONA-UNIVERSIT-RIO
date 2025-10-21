@@ -6,7 +6,7 @@ import 'package:app_carona_novo/main.dart';
 void main() {
   testWidgets('SplashScreen UI Test', (WidgetTester tester) async {
     // Constrói o aplicativo e dispara um frame
-    await tester.pumpWidget(const MyApp());
+    await tester.pumpWidget(const CaronaUniApp());
 
     // Verifica se o título "Carona Universitária" aparece na tela
     expect(find.text('Carona Universitária'), findsOneWidget);

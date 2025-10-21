@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "83995365801",
+    "project_id": "carona-universitiaria",
+    "storage_bucket": "carona-universitiaria.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:83995365801:android:23b104d813b51cdbc4f4b8",
+        "android_client_info": {
+          "package_name": "com.carona.universitaria"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "83995365801-bpafmgfffb157aedf27c20gilqe8epl4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD-gR7ZV9EkQKpfRUwPdnXyB4NLb7Kj8QM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "83995365801-bpafmgfffb157aedf27c20gilqe8epl4.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "83995365801-2po6f9sq2r8dvark72319moc84urf49s.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.carona.universitaria"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

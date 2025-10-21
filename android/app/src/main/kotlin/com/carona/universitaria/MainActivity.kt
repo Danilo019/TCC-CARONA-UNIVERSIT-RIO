@@ -1,5 +1,6 @@
-package com.example.app_carona_novo
+package com.carona.universitaria
 
 import io.flutter.embedding.android.FlutterActivity
 
 class MainActivity : FlutterActivity()
+

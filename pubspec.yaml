@@ -15,6 +15,20 @@ dependencies:
   flutter_native_splash: ^2.4.1
   image_picker: ^1.1.2
   http: ^1.2.2
+  
+  # Firebase - versões atualizadas para compatibilidade
+  firebase_core: ^3.6.0
+  firebase_auth: ^5.3.1
+  
+  # Microsoft Authentication (alternativa - usar aad_oauth)
+  aad_oauth: ^1.0.1
+  
+  # Provider para gerenciamento de estado
+  provider: ^6.1.1
+  
+  # URL Launcher (necessário para Microsoft Auth)
+  url_launcher: ^6.2.1
+  
   # permission_handler: ^11.3.1
   # google_maps_flutter: ^2.10.0
 

@@ -1,11 +1,6 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:app_carona_novo/components/common/custom_form_button.dart';
-import 'package:app_carona_novo/components/common/custom_input_field.dart';
-import 'package:app_carona_novo/components/common/page_header.dart';
-import 'package:app_carona_novo/components/common/page_heading.dart';
-import 'package:app_carona_novo/components/forget_password_page.dart';
-import 'package:app_carona_novo/components/signup_page.dart';
-import 'package:email_validator/email_validator.dart';
+import '../services/auth_service.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -15,181 +10,196 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  //
-  final _loginFormKey = GlobalKey<FormState>();
+  final _authService = AuthService();
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    Size size = MediaQuery.of(context).size;
-    return SafeArea(
-      child: Scaffold(
-        backgroundColor: const Color(0xffEEF1F3),
-        body: Column(
-          children: [
-            const PageHeader(),
-            Expanded(
-              child: Container(
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.vertical(
-                    top: Radius.circular(20),
-                  ),
-                ),
+    
+    return Scaffold(
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/images/background_android.png'),
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 3, sigmaY: 3),
+          child: Container(
+            color: const Color(0x800E4A8C), // Overlay azul escuro semi-transparente
+            child: SafeArea(
+              child: Center(
                 child: SingleChildScrollView(
-                  child: Form(
-                    key: _loginFormKey,
-                    child: Column(
-                      children: [
-                        const PageHeading(
-                          title: 'entrar',
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Ícone do globo
+                      const Icon(
+                        Icons.public_outlined,
+                        size: 60,
+                        color: Colors.white,
+                      ),
+                      
+                      const SizedBox(height: 40),
+                      
+                      // Título principal
+                      const Text(
+                        'Bem-vindo!',
+                        style: TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
                         ),
-                        CustomInputField(
-                            labelText: 'Email',
-                            hintText: 'seu.email.academico@cs.udf.edu.br',
-                            validator: (textValue) {
-                              if (textValue == null || textValue.isEmpty) {
-                                return 'O e-mail é obrigatório!';
-                              }
-                              if (!EmailValidator.validate(textValue)) {
-                                return 'Por favor, insira um e-mail válido';
-                              }
-                              return null;
-                            }),
-                        const SizedBox(
-                          height: 16,
+                        textAlign: TextAlign.center,
+                      ),
+                      
+                      const SizedBox(height: 16),
+                      
+                      // Subtítulo
+                      const Text(
+                        'Acesse com sua conta acadêmica para começar.',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w400,
                         ),
-                        CustomInputField(
-                          labelText: 'Senha',
-                          hintText: 'Sua senha',
-                          obscureText: true,
-                          suffixIcon: true,
-                          validator: (textValue) {
-                            if (textValue == null || textValue.isEmpty) {
-                              return 'A senha é obrigatória!';
-                            }
-                            return null;
-                          },
+                        textAlign: TextAlign.center,
+                      ),
+                      
+                      const SizedBox(height: 60),
+                      
+                      // Botão principal de login
+                      Container(
+                        width: double.infinity,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1A365D),
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        const SizedBox(
-                          height: 16,
-                        ),
-                        Container(
-                          width: size.width * 0.80,
-                          alignment: Alignment.centerRight,
-                          child: GestureDetector(
-                            onTap: () {
-                              Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (context) =>
-                                          const ForgetPasswordPage()));
-                            },
-                            child: const Text(
-                              'Esqueceu sua senha?',
-                              style: TextStyle(
-                                color: Color(0xff939393),
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: _isLoading ? null : _handleMicrosoftLogin,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  if (_isLoading)
+                                    const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                      ),
+                                    )
+                                  else
+                                    const Icon(
+                                      Icons.school_outlined,
+                                      color: Colors.white,
+                                      size: 24,
+                                    ),
+                                  const SizedBox(width: 12),
+                                  Flexible(
+                                    child: Text(
+                                      _isLoading ? 'Entrando...' : 'Entrar com E-mail Acadêmico',
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
                         ),
-                        const SizedBox(
-                          height: 20,
-                        ),
-                        CustomFormButton(
-                          innerText: 'Login',
-                          onPressed: _handleLoginUser,
-                        ),
-                        const SizedBox(
-                          height: 18,
-                        ),
-                        SizedBox(
-                          width: size.width * 0.8,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Text(
-                                'Não tem uma conta? ',
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    color: Color(0xff939393),
-                                    fontWeight: FontWeight.bold),
-                              ),
-                              GestureDetector(
-                                onTap: () {
-                                  Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                          builder: (context) =>
-                                              const SignupPage()));
-                                },
-                                child: const Text(
-                                  'Inscrever-se',
-                                  style: TextStyle(
-                                      fontSize: 15,
-                                      color: Color(0xff748288),
-                                      fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(
-                          height: 20,
-                        ),
-                        // BOTÃO PARA TESTAR AS TELAS DE LOCALIZAÇÃO
-                        SizedBox(
-                          width: size.width * 0.8,
-                          child: ElevatedButton(
-                            onPressed: () {
-                              Navigator.pushNamed(context, '/location-request');
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF4A90E2),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 15),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(25),
-                              ),
-                              elevation: 2,
-                            ),
-                            child: const Text(
-                              '🚗 Testar Telas de Localização',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(
-                          height: 20,
-                        ),
-                        const SizedBox(
-                          height: 30,
-                        ),
-                      ],
-                    ),
+                      ),
+                      
+                      const SizedBox(height: 40),
+                    ],
                   ),
                 ),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  void _handleLoginUser() {
-    // login user
-    if (_loginFormKey.currentState!.validate()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enviando dados..')),
-      );
+  /// Realiza login com Microsoft usando autenticação real
+  Future<void> _handleMicrosoftLogin() async {
+    if (!mounted) return;
+    
+    setState(() {
+      _isLoading = true;
+    });
 
-      // Após validação bem-sucedida, você pode navegar para localização
-      // Navigator.pushNamed(context, '/location-request');
+    try {
+      // Realiza login com Microsoft (apenas emails @cs.udf.edu.br)
+      final user = await _authService.signInWithUDFMicrosoft();
+
+      if (user != null && mounted) {
+        // Login bem-sucedido
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Bem-vindo, ${user.displayName ?? user.email}!'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+
+        // Aguarda um pouco para mostrar a mensagem
+        await Future.delayed(const Duration(milliseconds: 500));
+
+        // Navega para a tela principal
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, '/home');
+        }
+      }
+    } catch (e) {
+      // Tratamento de erros específicos
+      String errorMessage = 'Erro ao fazer login';
+      
+      if (e.toString().contains('UDF')) {
+        errorMessage = 'Apenas emails da UDF (@cs.udf.edu.br) são permitidos';
+      } else if (e.toString().contains('cancelado')) {
+        errorMessage = 'Login cancelado';
+      } else {
+        errorMessage = 'Erro no login: ${e.toString()}';
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
+
 }

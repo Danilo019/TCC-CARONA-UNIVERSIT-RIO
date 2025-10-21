@@ -1,274 +1,290 @@
 import 'package:flutter/material.dart';
-import 'package:app_carona_novo/screens/insert_destination_screen.dart'; // Importar InsertDestinationScreen
 
+/// Tela de solicitação de permissão de localização
+/// 
+/// Exibida após o onboarding, solicita ao usuário permissão
+/// para acessar a localização do dispositivo.
+/// Após conceder permissão, navega para a tela de login.
 class LocationRequestScreen extends StatefulWidget {
   const LocationRequestScreen({super.key});
 
   @override
-  LocationRequestScreenState createState() => LocationRequestScreenState();
+  State<LocationRequestScreen> createState() => _LocationRequestScreenState();
 }
 
-class LocationRequestScreenState extends State<LocationRequestScreen> {
+class _LocationRequestScreenState extends State<LocationRequestScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+  late Animation<double> _pulseAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Animação de pulso para o ícone de localização
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat(reverse: true);
+
+    _pulseAnimation = Tween<double>(begin: 0.95, end: 1.05).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: Curves.easeInOut,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
-        child: Column(
-          children: [
-            // Header com menu hambúrguer
-            Container(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(
-                      Icons.menu,
-                      color: Colors.black,
-                      size: 28,
-                    ),
-                    onPressed: () {
-                      Navigator.pushNamed(context, 
-                        '/messages'); // Abrir a tela de mensagens
-                    },
-                  ),
-                ],
-              ),
-            ),
-
-            // Seção azul com solicitação de localização
-            Container(
-              width: double.infinity,
-              decoration: const BoxDecoration(
-                color: Color(0xFF4A90E2),
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(20),
-                  bottomRight: Radius.circular(20),
-                ),
-              ),
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  // Ícone de localização
-                  Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withAlpha(51),
-                      borderRadius: BorderRadius.circular(40),
-                    ),
-                    child: const Icon(
-                      Icons.location_on,
-                      color: Colors.white,
-                      size: 40,
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // Texto explicativo
-                  const Text(
-                    "Para encontrar sua localização automaticamente, aceite em serviços de localização",
-                    textAlign: TextAlign.center,
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            children: [
+              // Botão de pular (opcional)
+              Align(
+                alignment: Alignment.topRight,
+                child: TextButton(
+                  onPressed: _skipLocationRequest,
+                  child: Text(
+                    'Pular',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: Colors.grey[600],
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
-                      height: 1.4,
-                    ),
-                  ),
-
-                  const SizedBox(height: 25),
-
-                  // Botão Ativar Localização
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        // Solicitar permissão de localização
-                        _requestLocationPermission();
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: const Color(0xFF4A90E2),
-                        padding: const EdgeInsets.symmetric(vertical: 15),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(25),
-                        ),
-                        elevation: 2,
-                      ),
-                      child: const Text(
-                        "Ativar localização",
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 30),
-
-            // Campo Ponto de Coleta
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Insira o ponto de coleta",
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
-                  ),
-
-                  const SizedBox(height: 10),
-
-                  // Campo de busca
-                  GestureDetector(
-                    onTap: () {
-                      // Navegar para tela de inserir destino
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const InsertDestinationScreen(),
-                        ),
-                      );
-                    },
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(15),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[100],
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: Colors.grey[300]!,
-                          width: 1,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.location_searching,
-                            color: Colors.grey[600],
-                            size: 20,
-                          ),
-                          const SizedBox(width: 10),
-                          Text(
-                            "Perto de você",
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 15,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 30),
-
-            // Preview do Mapa
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200],
-                    borderRadius: BorderRadius.circular(15),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withAlpha(26),
-                        blurRadius: 10,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(15),
-                    child: Stack(
-                      children: [
-                        // Simulação de mapa (substitua por GoogleMap quando integrar)
-                        Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                Colors.blue[50]!,
-                                Colors.blue[100]!,
-                              ],
-                            ),
-                          ),
-                          child: Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.map,
-                                  size: 60,
-                                  color: Colors.blue[300],
-                                ),
-                                const SizedBox(height: 10),
-                                Text(
-                                  "Preview do Mapa",
-                                  style: TextStyle(
-                                    color: Colors.blue[600],
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-
-                        // Marcador central
-                        const Center(
-                          child: Icon(
-                            Icons.location_on,
-                            color: Colors.red,
-                            size: 40,
-                          ),
-                        ),
-                      ],
                     ),
                   ),
                 ),
               ),
-            ),
 
-            const SizedBox(height: 20),
-          ],
+              const Spacer(),
+
+              // Ícone de localização animado
+              ScaleTransition(
+                scale: _pulseAnimation,
+                child: Container(
+                  width: 120,
+                  height: 120,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2196F3).withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.location_on,
+                    size: 60,
+                    color: Color(0xFF2196F3),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 40),
+
+              // Título
+              const Text(
+                'Ativar Localização',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+                textAlign: TextAlign.center,
+              ),
+
+              const SizedBox(height: 16),
+
+              // Descrição
+              Text(
+                'Para encontrar caronas próximas a você e oferecer rotas precisas, precisamos acessar sua localização.',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey[600],
+                  height: 1.5,
+                ),
+                textAlign: TextAlign.center,
+              ),
+
+              const SizedBox(height: 40),
+
+              // Benefícios
+              _buildBenefitItem(
+                icon: Icons.near_me,
+                title: 'Caronas Próximas',
+                description: 'Encontre caronas na sua região',
+              ),
+
+              const SizedBox(height: 16),
+
+              _buildBenefitItem(
+                icon: Icons.route,
+                title: 'Rotas Otimizadas',
+                description: 'Sugestões de rotas mais eficientes',
+              ),
+
+              const SizedBox(height: 16),
+
+              _buildBenefitItem(
+                icon: Icons.security,
+                title: 'Privacidade Garantida',
+                description: 'Seus dados estão seguros conosco',
+              ),
+
+              const Spacer(),
+
+              // Botão de ativar localização
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _requestLocationPermission,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2196F3),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                    elevation: 3,
+                  ),
+                  child: const Text(
+                    'Ativar Localização',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Botão de continuar sem localização
+              TextButton(
+                onPressed: _skipLocationRequest,
+                child: Text(
+                  'Continuar sem localização',
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  void _requestLocationPermission() {
-    // TODO: Implementar solicitação de permissão de localização aqui
-    // Exemplo de como seria:
-    // final permission = await Permission.location.request();
-    // if (permission.isGranted) {
-    //   // Localização concedida
+  /// Constrói um item de benefício
+  Widget _buildBenefitItem({
+    required IconData icon,
+    required String title,
+    required String description,
+  }) {
+    return Row(
+      children: [
+        Container(
+          width: 50,
+          height: 50,
+          decoration: BoxDecoration(
+            color: const Color(0xFF2196F3).withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(
+            icon,
+            color: const Color(0xFF2196F3),
+            size: 28,
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                description,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Solicita permissão de localização
+  void _requestLocationPermission() async {
+    // TODO: Implementar solicitação real de permissão
+    // Exemplo usando permission_handler:
+    // final status = await Permission.location.request();
+    // if (status.isGranted) {
+    //   _navigateToLogin();
     // }
 
-    // Mostrar feedback ao usuário
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Permissão de localização solicitada"),
-        backgroundColor: Color(0xFF4A90E2),
+    // Por enquanto, simula a concessão de permissão
+    _showLoadingDialog();
+
+    await Future.delayed(const Duration(seconds: 2));
+
+    if (mounted) {
+      Navigator.of(context).pop(); // Fecha o diálogo de loading
+      _navigateToLogin();
+    }
+  }
+
+  /// Pula a solicitação de localização
+  void _skipLocationRequest() {
+    _navigateToLogin();
+  }
+
+  /// Navega para a tela de login
+  void _navigateToLogin() {
+    Navigator.of(context).pushReplacementNamed('/login');
+  }
+
+  /// Exibe diálogo de carregamento
+  void _showLoadingDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Ativando localização...'),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
 }
+
