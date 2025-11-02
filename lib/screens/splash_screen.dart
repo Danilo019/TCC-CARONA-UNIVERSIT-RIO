@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart' as app_auth;
 
 /// Tela de Splash Screen inicial do aplicativo
 /// 
 /// Exibe o logo e nome do aplicativo por 3 segundos,
-/// depois navega automaticamente para a tela de onboarding.
+/// depois navega automaticamente baseado no estado de autenticação.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -45,12 +47,40 @@ class _SplashScreenState extends State<SplashScreen>
     // Iniciar animação
     _animationController.forward();
 
-    // Navegar para onboarding após 3 segundos
-    Timer(const Duration(seconds: 3), () {
-      if (mounted) {
+    // Verificar autenticação e navegar
+    _checkAuthAndNavigate();
+  }
+
+  /// Verifica estado de autenticação e navega
+  Future<void> _checkAuthAndNavigate() async {
+    // Aguarda um pouco para a animação
+    await Future.delayed(const Duration(seconds: 2));
+
+    if (!mounted) return;
+
+    // Verifica se há usuário autenticado
+    final authProvider = Provider.of<app_auth.AuthProvider>(context, listen: false);
+    
+    // Aguarda AuthProvider inicializar completamente
+    while (authProvider.status == app_auth.AuthStatus.loading || authProvider.status == app_auth.AuthStatus.initial) {
+      await Future.delayed(const Duration(milliseconds: 100));
+      if (!mounted) return;
+    }
+    
+    if (!mounted) return;
+
+    // Verifica se Firebase Auth tem usuário
+    final currentUser = authProvider.user;
+    
+    if (mounted) {
+      // Se está autenticado, vai direto para Home
+      if (currentUser != null) {
+        Navigator.of(context).pushReplacementNamed('/home');
+      } else {
+        // Se não está autenticado, vai para onboarding
         Navigator.of(context).pushReplacementNamed('/onboarding');
       }
-    });
+    }
   }
 
   @override
@@ -93,7 +123,7 @@ class _SplashScreenState extends State<SplashScreen>
                       borderRadius: BorderRadius.circular(30),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
+                          color: Colors.black.withValues(alpha: 0.2),
                           blurRadius: 20,
                           offset: const Offset(0, 10),
                         ),

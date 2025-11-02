@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../services/location_service.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 
 /// Tela de solicitação de permissão de localização
 /// 
@@ -75,7 +77,7 @@ class _LocationRequestScreenState extends State<LocationRequestScreen>
                   width: 120,
                   height: 120,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF2196F3).withOpacity(0.1),
+                    color: const Color(0xFF2196F3).withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
@@ -197,7 +199,7 @@ class _LocationRequestScreenState extends State<LocationRequestScreen>
           width: 50,
           height: 50,
           decoration: BoxDecoration(
-            color: const Color(0xFF2196F3).withOpacity(0.1),
+            color: const Color(0xFF2196F3).withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Icon(
@@ -236,21 +238,60 @@ class _LocationRequestScreenState extends State<LocationRequestScreen>
 
   /// Solicita permissão de localização
   void _requestLocationPermission() async {
-    // TODO: Implementar solicitação real de permissão
-    // Exemplo usando permission_handler:
-    // final status = await Permission.location.request();
-    // if (status.isGranted) {
-    //   _navigateToLogin();
-    // }
-
-    // Por enquanto, simula a concessão de permissão
     _showLoadingDialog();
 
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      final locationService = LocationService();
+      
+      // Verifica se o serviço de localização está habilitado
+      final isEnabled = await locationService.isLocationServiceEnabled();
+      
+      if (!isEnabled) {
+        if (mounted) {
+          Navigator.of(context).pop(); // Fecha o diálogo
+          _showLocationDisabledDialog();
+        }
+        return;
+      }
 
-    if (mounted) {
-      Navigator.of(context).pop(); // Fecha o diálogo de loading
-      _navigateToLogin();
+      // Solicita permissão
+      final granted = await locationService.requestLocationPermission();
+
+      if (mounted) {
+        Navigator.of(context).pop(); // Fecha o diálogo de loading
+
+        if (granted) {
+          // Tenta obter localização atual para validar
+          final position = await locationService.getCurrentLocation();
+          
+          if (position != null) {
+            if (kDebugMode) {
+              print('✓ Localização obtida com sucesso: ${position.latitude}, ${position.longitude}');
+            }
+            _navigateToLogin();
+          } else {
+            _showPermissionErrorDialog();
+          }
+        } else {
+          // Verifica se foi negada permanentemente
+          final hasPermission = await locationService.hasLocationPermission();
+          
+          if (!hasPermission) {
+            _showPermissionDeniedDialog();
+          } else {
+            _navigateToLogin();
+          }
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('✗ Erro ao solicitar permissão: $e');
+      }
+      
+      if (mounted) {
+        Navigator.of(context).pop(); // Fecha o diálogo
+        _showErrorDialog('Erro ao solicitar permissão de localização');
+      }
     }
   }
 
@@ -284,6 +325,91 @@ class _LocationRequestScreenState extends State<LocationRequestScreen>
           ),
         ),
       ),
+    );
+  }
+
+  /// Exibe diálogo quando serviço de localização está desabilitado
+  void _showLocationDisabledDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Localização Desabilitada'),
+        content: const Text(
+          'O serviço de localização do dispositivo está desabilitado. '
+          'Por favor, habilite nas configurações do dispositivo para usar esta funcionalidade.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              final locationService = LocationService();
+              await locationService.openLocationSettings();
+            },
+            child: const Text('Abrir Configurações'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Exibe diálogo quando permissão foi negada permanentemente
+  void _showPermissionDeniedDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Permissão Negada'),
+        content: const Text(
+          'A permissão de localização foi negada. Você pode habilitá-la nas configurações do aplicativo.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _navigateToLogin(); // Continua mesmo sem permissão
+            },
+            child: const Text('Continuar Sem Localização'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              final locationService = LocationService();
+              await locationService.openLocationSettings();
+            },
+            child: const Text('Abrir Configurações'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Exibe diálogo de erro genérico
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Erro'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _navigateToLogin();
+            },
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Exibe diálogo quando há erro ao obter localização
+  void _showPermissionErrorDialog() {
+    _showErrorDialog(
+      'Não foi possível obter sua localização. Você pode continuar usando o app sem localização.',
     );
   }
 }

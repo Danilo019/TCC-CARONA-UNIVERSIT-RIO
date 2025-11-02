@@ -60,7 +60,7 @@ class PageIndicator extends StatelessWidget {
         boxShadow: isActive
             ? [
                 BoxShadow(
-                  color: activeColor.withOpacity(0.4),
+                  color: activeColor.withValues(alpha: 0.4),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -103,7 +103,7 @@ class CircularPageIndicator extends StatelessWidget {
             shape: BoxShape.circle,
             color: isActive ? activeColor : inactiveColor,
             border: Border.all(
-              color: isActive ? activeColor : AppColors.white.withOpacity(0.5),
+              color: isActive ? activeColor : AppColors.white.withValues(alpha: 0.5),
               width: isActive ? 2 : 1,
             ),
           ),

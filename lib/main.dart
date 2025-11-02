@@ -7,11 +7,14 @@ import 'screens/splash_screen.dart';
 import 'features/onboarding/screens/onboarding_screen.dart';
 import 'screens/location_request_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/register_screen.dart';
+import 'screens/verify_token_screen.dart';
+import 'screens/profile_screen.dart';
+import 'screens/offer_ride_screen.dart';
+import 'screens/search_ride_screen.dart';
 import 'components/login_page.dart';
 import 'providers/auth_provider.dart';
 import 'config/firebase_config.dart';
-import 'config/aad_config.dart';
-
 
 void main() async {
   // Garante que os bindings do Flutter foram inicializados
@@ -42,6 +45,9 @@ void main() async {
   runApp(const CaronaUniApp());
 }
 
+// Global key para o Navigator (usado em alguns fluxos de autenticação)
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 class CaronaUniApp extends StatelessWidget {
   const CaronaUniApp({super.key});
 
@@ -54,7 +60,7 @@ class CaronaUniApp extends StatelessWidget {
       child: MaterialApp(
         title: 'Carona Universitária',
         debugShowCheckedModeBanner: false,
-        navigatorKey: AadConfig.navigatorKey,
+        navigatorKey: navigatorKey,
         
         // Tema do aplicativo
         theme: ThemeData(
@@ -78,7 +84,14 @@ class CaronaUniApp extends StatelessWidget {
           '/onboarding': (context) => const OnboardingScreen(),
           '/location-request': (context) => const LocationRequestScreen(),
           '/login': (context) => const LoginPage(),
+          '/register': (context) => const RegisterScreen(),
+          '/verify-token': (context) => VerifyTokenScreen(
+            email: ModalRoute.of(context)?.settings.arguments as String? ?? '',
+          ),
           '/home': (context) => const HomeScreen(),
+          '/profile': (context) => const ProfileScreen(),
+          '/offer-ride': (context) => const OfferRideScreen(),
+          '/search-ride': (context) => const SearchRideScreen(),
         },
       ),
     );

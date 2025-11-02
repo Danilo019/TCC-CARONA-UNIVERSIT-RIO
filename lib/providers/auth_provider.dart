@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
+import '../services/session_service.dart';
 import '../models/auth_user.dart';
 
 enum AuthStatus {
@@ -13,6 +14,7 @@ enum AuthStatus {
 
 class AuthProvider with ChangeNotifier {
   final AuthService _authService = AuthService();
+  final SessionService _sessionService = SessionService();
   
   AuthStatus _status = AuthStatus.initial;
   AuthUser? _user;
@@ -36,6 +38,21 @@ class AuthProvider with ChangeNotifier {
       
       await _authService.initialize();
       
+      // Verifica se já existe um usuário autenticado
+      final currentUser = _authService.currentUser;
+      if (currentUser != null) {
+        _user = AuthUser.fromFirebaseUser(currentUser);
+        _setStatus(AuthStatus.authenticated);
+        
+        // Salva sessão persistentemente
+        await _sessionService.saveSession(
+          userId: currentUser.uid,
+          email: currentUser.email ?? '',
+        );
+      } else {
+        _setStatus(AuthStatus.unauthenticated);
+      }
+      
       // Escuta mudanças no estado de autenticação
       _authService.authStateChanges.listen(_onAuthStateChanged);
       
@@ -45,40 +62,22 @@ class AuthProvider with ChangeNotifier {
   }
 
   /// Callback para mudanças no estado de autenticação
-  void _onAuthStateChanged(User? firebaseUser) {
+  void _onAuthStateChanged(User? firebaseUser) async {
     if (firebaseUser != null) {
       _user = AuthUser.fromFirebaseUser(firebaseUser);
       _setStatus(AuthStatus.authenticated);
+      
+      // Salva sessão persistentemente
+      await _sessionService.saveSession(
+        userId: firebaseUser.uid,
+        email: firebaseUser.email ?? '',
+      );
     } else {
       _user = null;
       _setStatus(AuthStatus.unauthenticated);
-    }
-  }
-
-  /// Realiza login com Microsoft
-  Future<bool> signInWithMicrosoft() async {
-    try {
-      _setStatus(AuthStatus.loading);
-      _clearError();
-
-      final firebaseUser = await _authService.signInWithUDFMicrosoft();
       
-      if (firebaseUser != null) {
-        _user = AuthUser.fromFirebaseUser(firebaseUser);
-        _setStatus(AuthStatus.authenticated);
-        
-        if (kDebugMode) {
-          print('Login realizado com sucesso: ${_user?.email}');
-        }
-        
-        return true;
-      } else {
-        _setError('Falha no login');
-        return false;
-      }
-    } catch (e) {
-      _setError('Erro no login: $e');
-      return false;
+      // Limpa sessão
+      await _sessionService.clearSession();
     }
   }
 

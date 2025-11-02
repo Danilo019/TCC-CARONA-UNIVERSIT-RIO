@@ -164,7 +164,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           borderRadius: BorderRadius.circular(30),
         ),
         elevation: 4,
-        shadowColor: AppColors.accentOrange.withOpacity(0.5),
+        shadowColor: AppColors.accentOrange.withValues(alpha: 0.5),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

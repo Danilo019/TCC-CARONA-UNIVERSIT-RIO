@@ -1,4 +1,15 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart' as app_auth;
+import '../components/map_widget.dart';
+import '../models/ride.dart';
+import '../models/location.dart';
+import '../services/location_service.dart';
+import '../services/google_maps_service.dart';
+import '../services/rides_service.dart';
+import 'package:flutter/foundation.dart';
+import 'package:geolocator/geolocator.dart';
 
 /// Tela principal do aplicativo após o onboarding
 /// 
@@ -16,9 +27,145 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
+  final LocationService _locationService = LocationService();
+  final GoogleMapsService _googleMapsService = GoogleMapsService();
+  final RidesService _ridesService = RidesService();
+  Location? _userLocation;
+  bool _isLoadingLocation = false;
+  StreamSubscription<Position>? _locationSubscription;
+  List<Ride> _rides = [];
 
-  // Nome do usuário (pode vir de autenticação/banco de dados)
-  final String userName = "Nome";
+  @override
+  void initState() {
+    super.initState();
+    _initializeLocation();
+    _loadRides();
+  }
+  
+  /// Carrega caronas do Firestore
+  Future<void> _loadRides() async {
+    try {
+      final rides = await _ridesService.getActiveRides();
+      if (mounted) {
+        setState(() {
+          _rides = rides;
+        });
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('✗ Erro ao carregar caronas: $e');
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _locationSubscription?.cancel();
+    super.dispose();
+  }
+
+  /// Inicializa e monitora localização do usuário
+  Future<void> _initializeLocation() async {
+    setState(() {
+      _isLoadingLocation = true;
+    });
+
+    try {
+      // Verifica se já tem permissão
+      final hasPermission = await _locationService.hasLocationPermission();
+      
+      if (hasPermission) {
+        // Obtém localização atual
+        await _getCurrentLocation();
+
+        // Inicia monitoramento em tempo real
+        _startLocationMonitoring();
+      } else {
+        // Tenta solicitar permissão
+        final granted = await _locationService.requestLocationPermission();
+        if (granted) {
+          await _getCurrentLocation();
+          _startLocationMonitoring();
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('✗ Erro ao inicializar localização: $e');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingLocation = false;
+        });
+      }
+    }
+  }
+
+  /// Obtém localização atual do usuário
+  Future<void> _getCurrentLocation() async {
+    try {
+      final position = await _locationService.getCurrentLocation();
+      
+      if (position != null) {
+        final location = Location(
+          latitude: position.latitude,
+          longitude: position.longitude,
+          timestamp: DateTime.now(),
+        );
+
+        // Faz reverse geocoding para obter endereço
+        final geocodeResult = await _googleMapsService.reverseGeocode(location);
+        
+        if (mounted) {
+          setState(() {
+            _userLocation = geocodeResult?.location ?? location;
+          });
+          
+          if (kDebugMode) {
+            print('✓ Localização atualizada: ${_userLocation!.latitude}, ${_userLocation!.longitude}');
+            if (geocodeResult != null) {
+              print('✓ Endereço: ${geocodeResult.formattedAddress}');
+            }
+          }
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('✗ Erro ao obter localização: $e');
+      }
+    }
+  }
+
+  /// Inicia monitoramento de localização em tempo real
+  void _startLocationMonitoring() {
+    _locationSubscription?.cancel();
+    
+    _locationSubscription = _locationService.watchPosition().listen(
+      (Position position) async {
+        final location = Location(
+          latitude: position.latitude,
+          longitude: position.longitude,
+          timestamp: DateTime.now(),
+        );
+
+        // Atualiza localização (sem fazer geocoding a cada atualização para economizar API calls)
+        if (mounted) {
+          setState(() {
+            _userLocation = location;
+          });
+          
+          if (kDebugMode) {
+            print('📍 Localização atualizada em tempo real: ${location.latitude}, ${location.longitude}');
+          }
+        }
+      },
+      onError: (error) {
+        if (kDebugMode) {
+          print('✗ Erro no stream de localização: $error');
+        }
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,61 +196,79 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Constrói o header com saudação e botão de perfil
   Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Saudação
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return Consumer<app_auth.AuthProvider>(
+      builder: (context, authProvider, child) {
+        final user = authProvider.user;
+        final displayName = user?.displayNameOrEmail ?? "Usuário";
+        final photoURL = user?.photoURL;
+        
+        return Padding(
+          padding: const EdgeInsets.all(20),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Bem-vindo(a) de volta,',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[600],
-                  fontWeight: FontWeight.w400,
-                ),
+              // Saudação
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Bem-vindo(a) de volta,',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Olá, $displayName!',
+                    style: const TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 4),
-              Text(
-                'Olá, $userName!',
-                style: const TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+
+              // Botão de perfil com foto
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _selectedIndex = 3;
+                  });
+                },
+                child: Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        blurRadius: 10,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: photoURL != null && photoURL.isNotEmpty
+                      ? ClipOval(
+                          child: Image.network(
+                            photoURL,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return const Icon(Icons.person_outline, size: 28);
+                            },
+                          ),
+                        )
+                      : const Icon(Icons.person_outline, size: 28, color: Colors.black87),
                 ),
               ),
             ],
           ),
-
-          // Botão de perfil
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 10,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: IconButton(
-              icon: const Icon(Icons.person_outline, size: 28),
-              color: Colors.black87,
-              onPressed: () {
-                // Navegar para perfil
-                setState(() {
-                  _selectedIndex = 3;
-                });
-              },
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -120,9 +285,13 @@ class _HomeScreenState extends State<HomeScreen> {
               icon: Icons.add_road,
               color: const Color(0xFF2196F3),
               textColor: Colors.white,
-              onTap: () {
-                // Navegar para tela de oferecer carona
-                _showComingSoonDialog('Oferecer Carona');
+              onTap: () async {
+                // Navega para tela de oferecer carona
+                final result = await Navigator.of(context).pushNamed('/offer-ride');
+                // Atualiza o mapa se uma carona foi criada
+                if (result == true && mounted) {
+                  await _loadRides();
+                }
               },
             ),
           ),
@@ -137,8 +306,8 @@ class _HomeScreenState extends State<HomeScreen> {
               color: Colors.white,
               textColor: Colors.black87,
               onTap: () {
-                // Navegar para tela de procurar carona
-                _showComingSoonDialog('Procurar Carona');
+                // Navega para tela de procurar carona
+                Navigator.of(context).pushNamed('/search-ride');
               },
             ),
           ),
@@ -165,8 +334,8 @@ class _HomeScreenState extends State<HomeScreen> {
           boxShadow: [
             BoxShadow(
               color: color == Colors.white
-                  ? Colors.black.withOpacity(0.08)
-                  : color.withOpacity(0.3),
+                  ? Colors.black.withValues(alpha: 0.08)
+                  : color.withValues(alpha: 0.3),
               blurRadius: 15,
               offset: const Offset(0, 5),
             ),
@@ -204,7 +373,7 @@ class _HomeScreenState extends State<HomeScreen> {
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.black.withValues(alpha: 0.1),
               blurRadius: 15,
               offset: const Offset(0, 5),
             ),
@@ -212,75 +381,30 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(20),
-          child: Stack(
-            children: [
-              // Simulação de mapa (substitua por GoogleMap quando integrar)
-              Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Color(0xFF81C9E8),
-                      Color(0xFF9FD9E9),
-                      Color(0xFFB8E6D5),
-                    ],
-                  ),
+          child: _isLoadingLocation
+              ? const Center(
+                  child: CircularProgressIndicator(),
+                )
+              : MapWidget(
+                  // Usa localização do usuário se disponível
+                  initialLocation: _userLocation,
+                  rides: _rides,
+                  onRideTap: (ride) {
+                    _showRideDetailsDialog(ride);
+                  },
+                  onMapTap: (location) {
+                    if (kDebugMode) {
+                      print('Mapa tocado em: ${location.latitude}, ${location.longitude}');
+                    }
+                  },
+                  showUserLocation: true,
+                  showRideMarkers: true,
                 ),
-                child: Stack(
-                  children: [
-                    // Simulação de ruas (linhas brancas)
-                    CustomPaint(
-                      size: Size.infinite,
-                      painter: MapStreetsPainter(),
-                    ),
-
-                    // Marcadores de caronas disponíveis
-                    _buildCarMarker(top: 100, left: 80),
-                    _buildCarMarker(top: 250, left: 200),
-                    _buildCarMarker(top: 400, left: 50),
-                  ],
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );
   }
 
-  /// Constrói um marcador de carro no mapa
-  Widget _buildCarMarker({required double top, required double left}) {
-    return Positioned(
-      top: top,
-      left: left,
-      child: GestureDetector(
-        onTap: () {
-          _showCaronaDetailsDialog();
-        },
-        child: Container(
-          width: 50,
-          height: 50,
-          decoration: BoxDecoration(
-            color: const Color(0xFF2196F3),
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF2196F3).withOpacity(0.4),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: const Icon(
-            Icons.directions_car,
-            color: Colors.white,
-            size: 28,
-          ),
-        ),
-      ),
-    );
-  }
 
   /// Constrói a barra de navegação inferior
   Widget _buildBottomNavigationBar() {
@@ -289,7 +413,7 @@ class _HomeScreenState extends State<HomeScreen> {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 10,
             offset: const Offset(0, -2),
           ),
@@ -304,8 +428,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
           // Navegação baseada no índice
           if (index == 3) {
-            // Perfil - navegar para login
-            Navigator.of(context).pushNamed('/login');
+            // Perfil - navegar para tela de perfil
+            Navigator.of(context).pushNamed('/profile');
           } else if (index == 2) {
             // Mensagens
             _showComingSoonDialog('Mensagens');
@@ -388,23 +512,112 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   /// Exibe detalhes de uma carona
-  void _showCaronaDetailsDialog() {
+  void _showRideDetailsDialog(Ride ride) {
+    final timeStr = ride.dateTime.toString().substring(11, 16); // HH:mm
+    
+    // Calcula distância antecipadamente (fora do StatefulBuilder para evitar múltiplas chamadas)
+    Future<DistanceMatrixResult?>? distanceFuture;
+    if (_userLocation != null) {
+      distanceFuture = _googleMapsService.getDistanceMatrix(
+        origin: _userLocation!,
+        destination: ride.origin,
+      );
+    }
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Carona Disponível'),
-        content: const Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Motorista: João Silva'),
-            SizedBox(height: 8),
-            Text('Destino: Campus Universitário'),
-            SizedBox(height: 8),
-            Text('Horário: 14:30'),
-            SizedBox(height: 8),
-            Text('Vagas: 2 disponíveis'),
-          ],
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Motorista: ${ride.driverName}'),
+              const SizedBox(height: 8),
+              Text('Origem: ${ride.origin.address ?? "Indefinida"}'),
+              const SizedBox(height: 8),
+              Text('Destino: ${ride.destination.address ?? "Indefinido"}'),
+              const SizedBox(height: 8),
+              Text('Horário: $timeStr'),
+              const SizedBox(height: 8),
+              Text('Vagas: ${ride.availableSeats} disponíveis de ${ride.maxSeats}'),
+              if (_userLocation != null && distanceFuture != null) ...[
+                const SizedBox(height: 12),
+                const Divider(),
+                const SizedBox(height: 8),
+                FutureBuilder<DistanceMatrixResult?>(
+                  future: distanceFuture,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Row(
+                        children: [
+                          SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          SizedBox(width: 8),
+                          Text('Calculando distância...'),
+                        ],
+                      );
+                    } else if (snapshot.hasError || 
+                               snapshot.data == null || 
+                               (snapshot.data == null && snapshot.connectionState == ConnectionState.done)) {
+                      return Row(
+                        children: [
+                          const Icon(Icons.info_outline, size: 16, color: Colors.orange),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              'Habilite Distance Matrix API no Google Cloud Console',
+                              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                            ),
+                          ),
+                        ],
+                      );
+                    } else if (snapshot.hasData) {
+                      final result = snapshot.data!;
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.straighten, size: 16, color: Colors.grey),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Distância: ${result.distanceKm.toStringAsFixed(1)} km',
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Icon(Icons.access_time, size: 16, color: Colors.grey),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Tempo: ${_formatDuration(result.duration)}',
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                            ],
+                          ),
+                        ],
+                      );
+                    } else {
+                      return const SizedBox.shrink();
+                    }
+                  },
+                ),
+              ],
+              if (ride.description != null) ...[
+                const SizedBox(height: 12),
+                const Divider(),
+                const SizedBox(height: 8),
+                Text('Descrição: ${ride.description}'),
+              ],
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -422,37 +635,14 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-}
 
-/// CustomPainter para desenhar ruas no mapa simulado
-class MapStreetsPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.white.withOpacity(0.3)
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
-
-    // Linhas horizontais
-    for (double y = 0; y < size.height; y += 80) {
-      canvas.drawLine(
-        Offset(0, y),
-        Offset(size.width, y),
-        paint,
-      );
-    }
-
-    // Linhas verticais
-    for (double x = 0; x < size.width; x += 80) {
-      canvas.drawLine(
-        Offset(x, 0),
-        Offset(x, size.height),
-        paint,
-      );
+  /// Formata duração para exibição
+  String _formatDuration(Duration duration) {
+    if (duration.inHours > 0) {
+      return '${duration.inHours}h ${duration.inMinutes.remainder(60)}min';
+    } else {
+      return '${duration.inMinutes}min';
     }
   }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 

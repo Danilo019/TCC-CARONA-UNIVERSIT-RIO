@@ -23,9 +23,11 @@ class FirebaseConfig {
 
   // Configurações do Microsoft Azure AD
   static const String microsoftClientId = '369b4e14-e96e-4710-9d72-d3413a315cb5';
-  static const String microsoftTenantId = '81423062-332e-4a47-be08-ba4b3b2fb7ac';
-  // Para aad_oauth, use o formato padrão
-  static const String microsoftRedirectUri = 'https://login.live.com/oauth20_desktop.srf';
+  static const String microsoftTenantId = 'common'; // Usar 'common' para multi-tenant
+  // URI de redirecionamento para aplicativo móvel
+  static const String microsoftRedirectUri = 'msauth://com.carona.universitaria/df%2FWrQM67qwAZFa%2F4i5uTORfZgI%3D';
+  // URI de redirecionamento para web
+  static const String microsoftWebRedirectUri = 'https://carona-universitiaria.firebaseapp.com/__/auth/handler';
   
   // Scopes necessários para Microsoft Graph
   static const List<String> microsoftScopes = [
