@@ -3,10 +3,14 @@ import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import '../models/ride.dart';
 import '../models/location.dart';
+import '../models/ride_request.dart';
 import '../services/rides_service.dart';
 import '../services/google_maps_service.dart';
 import '../services/location_service.dart';
+import '../services/ride_request_service.dart';
 import '../components/map_widget.dart';
+import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
 
 /// Tela para procurar e visualizar caronas disponíveis
 class SearchRideScreen extends StatefulWidget {
@@ -14,11 +18,19 @@ class SearchRideScreen extends StatefulWidget {
 
   @override
   State<SearchRideScreen> createState() => _SearchRideScreenState();
+  
+  /// Recarrega as caronas quando volta para esta tela
+  static void reloadOnReturn(BuildContext context) {
+    // Será chamado quando voltar de outra tela
+    final state = context.findAncestorStateOfType<_SearchRideScreenState>();
+    state?._loadRides();
+  }
 }
 
 class _SearchRideScreenState extends State<SearchRideScreen> {
   final RidesService _ridesService = RidesService();
   final LocationService _locationService = LocationService();
+  final RideRequestService _requestService = RideRequestService();
 
   List<Ride> _allRides = [];
   List<Ride> _filteredRides = [];
@@ -37,6 +49,13 @@ class _SearchRideScreenState extends State<SearchRideScreen> {
     _loadCurrentLocation();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Recarrega caronas quando a tela é exibida novamente
+    // Isso garante que novas caronas apareçam imediatamente
+  }
+
   /// Carrega caronas do Firestore
   Future<void> _loadRides() async {
     setState(() {
@@ -44,7 +63,18 @@ class _SearchRideScreenState extends State<SearchRideScreen> {
     });
 
     try {
+      if (kDebugMode) {
+        print('🔍 Buscando caronas ativas...');
+      }
+      
       final rides = await _ridesService.getActiveRides();
+      
+      if (kDebugMode) {
+        print('✓ ${rides.length} caronas carregadas');
+        for (var ride in rides) {
+          print('  - ${ride.driverName}: ${ride.origin.address ?? 'Sem endereço'} → ${ride.destination.address ?? 'Sem endereço'}');
+        }
+      }
       
       if (mounted) {
         setState(() {
@@ -53,9 +83,10 @@ class _SearchRideScreenState extends State<SearchRideScreen> {
           _isLoading = false;
         });
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       if (kDebugMode) {
         print('✗ Erro ao carregar caronas: $e');
+        print('  Stack trace: $stackTrace');
       }
       
       if (mounted) {
@@ -221,6 +252,28 @@ class _SearchRideScreenState extends State<SearchRideScreen> {
 
   /// Exibe detalhes da carona
   Future<void> _showRideDetails(Ride ride) async {
+    // Verifica se o usuário tem solicitação aceita para esta carona
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final user = authProvider.user;
+    
+    RideRequest? acceptedRequest;
+    if (user != null) {
+      final requests = await _requestService.getRequestsByPassenger(user.uid);
+      acceptedRequest = requests.firstWhere(
+        (r) => r.rideId == ride.id && r.isAccepted,
+        orElse: () => RideRequest(
+          id: '',
+          rideId: '',
+          passengerId: '',
+          passengerName: '',
+          createdAt: DateTime.now(),
+        ),
+      );
+      if (acceptedRequest.id.isEmpty) {
+        acceptedRequest = null;
+      }
+    }
+
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -229,6 +282,7 @@ class _SearchRideScreenState extends State<SearchRideScreen> {
         ride: ride,
         userLocation: _userLocation,
         onReserve: () => _reserveRide(ride),
+        acceptedRequest: acceptedRequest,
       ),
     );
   }
@@ -243,6 +297,14 @@ class _SearchRideScreenState extends State<SearchRideScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
+          // Botão de atualizar
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              _loadRides();
+            },
+            tooltip: 'Atualizar lista',
+          ),
           IconButton(
             icon: Icon(_viewMode == 0 ? Icons.map : Icons.list),
             onPressed: () {
@@ -250,6 +312,7 @@ class _SearchRideScreenState extends State<SearchRideScreen> {
                 _viewMode = _viewMode == 0 ? 1 : 0;
               });
             },
+            tooltip: _viewMode == 0 ? 'Ver mapa' : 'Ver lista',
           ),
         ],
       ),
@@ -639,12 +702,30 @@ class _RideDetailsBottomSheet extends StatelessWidget {
   final Ride ride;
   final Location? userLocation;
   final VoidCallback onReserve;
+  final RideRequest? acceptedRequest;
 
   const _RideDetailsBottomSheet({
     required this.ride,
     this.userLocation,
     required this.onReserve,
+    this.acceptedRequest,
   });
+
+  /// Abre a tela de chat
+  void _openChat(BuildContext context) {
+    Navigator.pop(context); // Fecha o bottom sheet
+    Navigator.pushNamed(
+      context,
+      '/chat',
+      arguments: {
+        'ride': ride,
+        'isDriver': false,
+        'otherUserName': ride.driverName,
+        'otherUserPhotoURL': ride.driverPhotoURL,
+        'otherUserId': ride.driverId,
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -834,14 +915,41 @@ class _RideDetailsBottomSheet extends StatelessWidget {
 
           const SizedBox(height: 32),
 
+          // Botão de chat (se tem solicitação aceita)
+          if (acceptedRequest != null) ...[
+            SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: ElevatedButton.icon(
+                onPressed: () => _openChat(context),
+                icon: const Icon(Icons.chat, color: Colors.white),
+                label: const Text(
+                  'Conversar com Motorista',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+
           // Botão de reservar
           SizedBox(
             width: double.infinity,
             height: 56,
             child: ElevatedButton(
-              onPressed: ride.availableSeats > 0 ? onReserve : null,
+              onPressed: ride.availableSeats > 0 && acceptedRequest == null ? onReserve : null,
               style: ElevatedButton.styleFrom(
-                backgroundColor: ride.availableSeats > 0 
+                backgroundColor: ride.availableSeats > 0 && acceptedRequest == null
                     ? const Color(0xFF2196F3) 
                     : Colors.grey,
                 foregroundColor: Colors.white,
@@ -850,9 +958,11 @@ class _RideDetailsBottomSheet extends StatelessWidget {
                 ),
               ),
               child: Text(
-                ride.availableSeats > 0 
-                    ? 'Reservar Vaga'
-                    : 'Sem Vagas',
+                acceptedRequest != null
+                    ? 'Solicitação Aceita'
+                    : ride.availableSeats > 0 
+                        ? 'Reservar Vaga'
+                        : 'Sem Vagas',
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,

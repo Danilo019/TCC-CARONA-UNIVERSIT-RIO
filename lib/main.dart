@@ -12,6 +12,14 @@ import 'screens/verify_token_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/offer_ride_screen.dart';
 import 'screens/search_ride_screen.dart';
+import 'screens/vehicle_register_screen.dart';
+import 'screens/ride_manager_screen.dart';
+import 'screens/chat_screen.dart';
+import 'screens/forgot_password_screen.dart';
+import 'screens/reset_password_screen.dart';
+import 'screens/edit_profile_screen.dart';
+import 'models/vehicle.dart';
+import 'models/ride.dart';
 import 'components/login_page.dart';
 import 'providers/auth_provider.dart';
 import 'config/firebase_config.dart';
@@ -85,6 +93,15 @@ class CaronaUniApp extends StatelessWidget {
           '/location-request': (context) => const LocationRequestScreen(),
           '/login': (context) => const LoginPage(),
           '/register': (context) => const RegisterScreen(),
+          '/forgot-password': (context) => const ForgotPasswordScreen(),
+          '/reset-password': (context) {
+            final args = ModalRoute.of(context)!.settings.arguments as Map<String, String>;
+            return ResetPasswordScreen(
+              email: args['email']!,
+              token: args['token']!,
+            );
+          },
+          '/edit-profile': (context) => const EditProfileScreen(),
           '/verify-token': (context) => VerifyTokenScreen(
             email: ModalRoute.of(context)?.settings.arguments as String? ?? '',
           ),
@@ -92,6 +109,26 @@ class CaronaUniApp extends StatelessWidget {
           '/profile': (context) => const ProfileScreen(),
           '/offer-ride': (context) => const OfferRideScreen(),
           '/search-ride': (context) => const SearchRideScreen(),
+          '/vehicle-register': (context) {
+            final vehicle = ModalRoute.of(context)?.settings.arguments as Vehicle?;
+            return VehicleRegisterScreen(existingVehicle: vehicle);
+          },
+          '/ride-manager': (context) => const RideManagerScreen(),
+          '/chat': (context) {
+            final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+            if (args == null) {
+              return const Scaffold(
+                body: Center(child: Text('Erro: argumentos não fornecidos')),
+              );
+            }
+            return ChatScreen(
+              ride: args['ride'] as Ride,
+              isDriver: args['isDriver'] as bool,
+              otherUserName: args['otherUserName'] as String?,
+              otherUserPhotoURL: args['otherUserPhotoURL'] as String?,
+              otherUserId: args['otherUserId'] as String?,
+            );
+          },
         },
       ),
     );

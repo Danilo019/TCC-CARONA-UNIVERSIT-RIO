@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart' as app_auth;
+import '../services/auth_service.dart';
 
 /// Tela de perfil do usuário
 class ProfileScreen extends StatelessWidget {
@@ -221,12 +222,35 @@ class ProfileScreen extends StatelessWidget {
             value: user.email,
           ),
           _buildDivider(),
-          _buildInfoTile(
-            icon: Icons.verified_user_outlined,
-            label: 'Status',
-            value: user.emailVerified ? 'Verificado' : 'Não verificado',
-            valueColor: user.emailVerified ? Colors.green : Colors.orange,
-          ),
+          _buildVerificationTile(context, user),
+          // Alerta se não verificado
+          if (!user.emailVerified) ...[
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.orange[50],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.orange[200]!),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.orange[700], size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Seu email ainda não foi verificado. Verifique sua caixa de entrada e clique no link enviado.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.orange[900],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
           _buildDivider(),
           _buildInfoTile(
             icon: Icons.calendar_today_outlined,
@@ -246,6 +270,210 @@ class ProfileScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// Constrói tile de verificação de email com botão de ação
+  Widget _buildVerificationTile(BuildContext context, dynamic user) {
+    final isVerified = user.emailVerified;
+    final authService = AuthService();
+    
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: isVerified ? Colors.green[50] : Colors.orange[50],
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              isVerified ? Icons.verified_user : Icons.verified_user_outlined,
+              color: isVerified ? Colors.green[700] : Colors.orange[700],
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Status do Email',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Text(
+                      isVerified ? 'Verificado' : 'Não verificado',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: isVerified ? Colors.green[700] : Colors.orange[700],
+                      ),
+                    ),
+                    if (isVerified) ...[
+                      const SizedBox(width: 8),
+                      Icon(
+                        Icons.check_circle,
+                        size: 18,
+                        color: Colors.green[700],
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+          if (!isVerified)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: () => _handleSendVerificationEmail(context, authService),
+                  icon: const Icon(Icons.email_outlined, size: 18),
+                  label: const Text('Enviar Verificação'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange[700],
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () => _handleRefreshVerificationStatus(context),
+                  child: const Text(
+                    'Atualizar Status',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Atualiza o status de verificação (útil após verificar email no navegador)
+  Future<void> _handleRefreshVerificationStatus(BuildContext context) async {
+    final authProvider = Provider.of<app_auth.AuthProvider>(context, listen: false);
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    try {
+      await authProvider.refreshUser();
+
+      if (context.mounted) {
+        Navigator.pop(context); // Fecha loading
+
+        final user = authProvider.user;
+        if (user != null && user.emailVerified) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.white),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text('Email verificado com sucesso!'),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Email ainda não verificado. Verifique sua caixa de entrada.'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao atualizar: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Envia email de verificação
+  Future<void> _handleSendVerificationEmail(
+    BuildContext context,
+    AuthService authService,
+  ) async {
+    // Mostra loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    try {
+      await authService.sendEmailVerification();
+      
+      // Recarrega o usuário no provider
+      final authProvider = Provider.of<app_auth.AuthProvider>(context, listen: false);
+      await authProvider.refreshUser();
+
+      if (context.mounted) {
+        Navigator.pop(context); // Fecha loading
+        
+        // Mostra sucesso
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Email de verificação enviado! Verifique sua caixa de entrada.',
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context); // Fecha loading
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    }
   }
 
   /// Constrói um item de informação
@@ -330,14 +558,23 @@ class ProfileScreen extends StatelessWidget {
       child: Column(
         children: [
           _buildActionTile(
+            icon: Icons.directions_car,
+            label: 'Meu Veículo',
+            onTap: () {
+              Navigator.of(context).pushNamed('/vehicle-register');
+            },
+          ),
+          _buildDivider(),
+          _buildActionTile(
             icon: Icons.edit_outlined,
             label: 'Editar Perfil',
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Funcionalidade em breve'),
-                ),
-              );
+            onTap: () async {
+              final result = await Navigator.pushNamed(context, '/edit-profile');
+              // Recarrega dados do usuário após editar perfil
+              if (result == true) {
+                final authProvider = Provider.of<app_auth.AuthProvider>(context, listen: false);
+                await authProvider.refreshUser();
+              }
             },
           ),
           _buildDivider(),

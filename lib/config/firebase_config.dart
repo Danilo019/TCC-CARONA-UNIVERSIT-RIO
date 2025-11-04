@@ -43,6 +43,14 @@ class FirebaseConfig {
     '@cs.udf.edu.br',
   ];
 
+  // URL do backend para reset de senha (sem plano Blaze)
+  // Configure após fazer deploy do backend (ver backend/README.md)
+  // Exemplos:
+  // - Heroku: 'https://carona-universitaria-backend.herokuapp.com'
+  // - Vercel: 'https://carona-universitaria-backend.vercel.app'
+  // - Railway: 'https://carona-universitaria-backend.railway.app'
+  static const String? backendUrl = null; // Configure a URL aqui após deploy
+
   // Método para obter configurações baseado no ambiente
   static Map<String, dynamic> getConfig({bool isProduction = false}) {
     return isProduction ? production : development;

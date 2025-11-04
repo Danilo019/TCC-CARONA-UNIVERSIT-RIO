@@ -5,11 +5,14 @@ import '../providers/auth_provider.dart' as app_auth;
 import '../components/map_widget.dart';
 import '../models/ride.dart';
 import '../models/location.dart';
+import '../models/ride_request.dart';
 import '../services/location_service.dart';
 import '../services/google_maps_service.dart';
 import '../services/rides_service.dart';
+import '../services/ride_request_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:intl/intl.dart';
 
 /// Tela principal do aplicativo após o onboarding
 /// 
@@ -30,16 +33,97 @@ class _HomeScreenState extends State<HomeScreen> {
   final LocationService _locationService = LocationService();
   final GoogleMapsService _googleMapsService = GoogleMapsService();
   final RidesService _ridesService = RidesService();
+  final RideRequestService _rideRequestService = RideRequestService();
   Location? _userLocation;
   bool _isLoadingLocation = false;
   StreamSubscription<Position>? _locationSubscription;
   List<Ride> _rides = [];
+  List<Ride> _myRides = []; // Caronas do motorista
+  List<RideRequest> _acceptedRequests = []; // Solicitações aceitas (passageiro)
 
   @override
   void initState() {
     super.initState();
     _initializeLocation();
     _loadRides();
+    _loadChats();
+  }
+
+  /// Carrega conversas (caronas com solicitações aceitas)
+  Future<void> _loadChats() async {
+    try {
+      final authProvider = Provider.of<app_auth.AuthProvider>(context, listen: false);
+      final user = authProvider.user;
+
+      if (user == null) return;
+
+      // Carrega caronas do motorista
+      try {
+        final ridesStream = _ridesService.watchRidesByDriver(user.uid);
+        ridesStream.listen(
+          (rides) {
+            if (mounted) {
+              setState(() {
+                _myRides = rides;
+              });
+            }
+          },
+          onError: (error) {
+            if (kDebugMode) {
+              print('⚠ Erro no stream de caronas do motorista: $error');
+            }
+          },
+        );
+      } catch (e) {
+        if (kDebugMode) {
+          print('⚠ Erro ao carregar stream de caronas: $e');
+        }
+      }
+
+      // Carrega primeira vez - com fallback
+      List<Ride> myRides = [];
+      try {
+        final rides = await _ridesService.getActiveRides();
+        myRides = rides.where((r) => r.driverId == user.uid).toList();
+      } catch (e) {
+        if (kDebugMode) {
+          print('⚠ Erro ao carregar caronas ativas: $e');
+        }
+        // Usa lista vazia como fallback
+        myRides = [];
+      }
+      
+      // Carrega solicitações aceitas do passageiro - com tratamento de erro
+      List<RideRequest> acceptedRequests = [];
+      try {
+        final requests = await _rideRequestService.getRequestsByPassenger(user.uid);
+        acceptedRequests = requests.where((r) => r.isAccepted).toList();
+      } catch (e) {
+        if (kDebugMode) {
+          print('⚠ Erro ao carregar solicitações (permissão negada): $e');
+          print('💡 Configure as regras do Firestore para permitir leitura de ride_requests');
+        }
+        // Continua sem solicitações, não quebra a aplicação
+      }
+
+      if (mounted) {
+        setState(() {
+          _myRides = myRides;
+          _acceptedRequests = acceptedRequests;
+        });
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('✗ Erro ao carregar conversas: $e');
+      }
+      // Não quebra a aplicação, apenas mostra estado vazio
+      if (mounted) {
+        setState(() {
+          _myRides = [];
+          _acceptedRequests = [];
+        });
+      }
+    }
   }
   
   /// Carrega caronas do Firestore
@@ -172,22 +256,28 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
       body: SafeArea(
-        child: Column(
-          children: [
-            // Header com saudação e botão de perfil
-            _buildHeader(),
+        child: _selectedIndex == 0
+            ? Column(
+                children: [
+                  // Header com saudação e botão de perfil
+                  _buildHeader(),
 
-            // Botões de ação principais
-            _buildActionButtons(),
+                  // Botões de ação principais
+                  _buildActionButtons(),
 
-            const SizedBox(height: 20),
+                  const SizedBox(height: 20),
 
-            // Mapa com caronas disponíveis
-            Expanded(
-              child: _buildMapSection(),
-            ),
-          ],
-        ),
+                  // Mapa com caronas disponíveis
+                  Expanded(
+                    child: _buildMapSection(),
+                  ),
+                ],
+              )
+            : _selectedIndex == 2
+                ? _buildMessagesScreen()
+                : _selectedIndex == 1
+                    ? _buildTripsScreen()
+                    : const SizedBox.shrink(),
       ),
       // Navegação inferior
       bottomNavigationBar: _buildBottomNavigationBar(),
@@ -305,9 +395,13 @@ class _HomeScreenState extends State<HomeScreen> {
               icon: Icons.search,
               color: Colors.white,
               textColor: Colors.black87,
-              onTap: () {
+              onTap: () async {
                 // Navega para tela de procurar carona
-                Navigator.of(context).pushNamed('/search-ride');
+                await Navigator.of(context).pushNamed('/search-ride');
+                // Recarrega caronas quando voltar
+                if (mounted) {
+                  await _loadRides();
+                }
               },
             ),
           ),
@@ -431,8 +525,8 @@ class _HomeScreenState extends State<HomeScreen> {
             // Perfil - navegar para tela de perfil
             Navigator.of(context).pushNamed('/profile');
           } else if (index == 2) {
-            // Mensagens
-            _showComingSoonDialog('Mensagens');
+            // Mensagens - já carrega na tela
+            _loadChats();
           } else if (index == 1) {
             // Viagens
             _showComingSoonDialog('Viagens');
@@ -488,6 +582,298 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: Icon(Icons.person_outline),
             activeIcon: Icon(Icons.person),
             label: 'Perfil',
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Constrói a tela de mensagens
+  Widget _buildMessagesScreen() {
+    final authProvider = Provider.of<app_auth.AuthProvider>(context, listen: false);
+    final user = authProvider.user;
+
+    if (user == null) {
+      return const Center(
+        child: Text('Faça login para ver suas mensagens'),
+      );
+    }
+
+    // Carrega conversas completas (com caronas encontradas)
+    return FutureBuilder<List<_ChatListItem>>(
+      future: _loadChatList(user.uid),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final chatList = snapshot.data ?? [];
+
+        return Column(
+      children: [
+        // Header
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              const Text(
+                'Mensagens',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                onPressed: _loadChats,
+                tooltip: 'Atualizar',
+              ),
+            ],
+          ),
+        ),
+
+        // Lista de conversas
+        Expanded(
+          child: chatList.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.chat_bubble_outline,
+                        size: 80,
+                        color: Colors.grey[400],
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Nenhuma conversa ainda',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Inicie uma conversa através de uma carona!',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[500],
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                )
+              : RefreshIndicator(
+                  onRefresh: () async {
+                    await _loadChats();
+                    setState(() {});
+                  },
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: chatList.length,
+                    itemBuilder: (context, index) {
+                      final chat = chatList[index];
+                      return _buildChatItem(chat);
+                    },
+                  ),
+                ),
+        ),
+      ],
+    );
+      },
+    );
+  }
+
+  /// Carrega lista completa de conversas
+  Future<List<_ChatListItem>> _loadChatList(String userId) async {
+    List<_ChatListItem> chatList = [];
+
+    try {
+      // Carrega todas as caronas ativas primeiro - com fallback
+      List<Ride> allRides = [];
+      try {
+        allRides = await _ridesService.getActiveRides();
+      } catch (e) {
+        if (kDebugMode) {
+          print('⚠ Erro ao carregar caronas ativas, usando lista local: $e');
+        }
+        // Usa lista local como fallback
+        allRides = _rides;
+      }
+
+      // Adiciona conversas como passageiro (solicitações aceitas)
+      for (final request in _acceptedRequests) {
+        try {
+          final ride = allRides.firstWhere(
+            (r) => r.id == request.rideId,
+            orElse: () => Ride(
+              id: '',
+              driverId: '',
+              driverName: '',
+              origin: Location(latitude: 0, longitude: 0, timestamp: DateTime.now()),
+              destination: Location(latitude: 0, longitude: 0, timestamp: DateTime.now()),
+              dateTime: DateTime.now(),
+              maxSeats: 1,
+              availableSeats: 0,
+              createdAt: DateTime.now(),
+            ),
+          );
+
+          if (ride.id.isNotEmpty) {
+            chatList.add(_ChatListItem(
+              ride: ride,
+              isDriver: false,
+              otherUserName: ride.driverName,
+              otherUserPhotoURL: ride.driverPhotoURL,
+              otherUserId: ride.driverId,
+            ));
+          }
+        } catch (e) {
+          if (kDebugMode) {
+            print('⚠ Erro ao processar solicitação ${request.id}: $e');
+          }
+        }
+      }
+
+      // Adiciona conversas como motorista (caronas com passageiros aceitos)
+      for (final ride in _myRides) {
+        try {
+          final requests = await _rideRequestService.getRequestsByRide(ride.id);
+          final accepted = requests.where((r) => r.isAccepted).toList();
+          
+          for (final request in accepted) {
+            if (!chatList.any((item) => item.ride.id == ride.id && item.otherUserId == request.passengerId)) {
+              chatList.add(_ChatListItem(
+                ride: ride,
+                isDriver: true,
+                otherUserName: request.passengerName,
+                otherUserPhotoURL: request.passengerPhotoURL,
+                otherUserId: request.passengerId,
+              ));
+            }
+          }
+        } catch (e) {
+          if (kDebugMode) {
+            print('⚠ Erro ao carregar solicitações da carona ${ride.id}: $e');
+          }
+          // Continua sem quebrar, apenas não mostra esta conversa
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('✗ Erro geral ao carregar lista de conversas: $e');
+      }
+    }
+
+    return chatList;
+  }
+
+  /// Constrói item de conversa na lista
+  Widget _buildChatItem(_ChatListItem chat) {
+    final timeStr = DateFormat('dd/MM/yyyy').format(chat.ride.dateTime);
+    
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: ListTile(
+        leading: CircleAvatar(
+          radius: 28,
+          backgroundImage: chat.otherUserPhotoURL != null
+              ? NetworkImage(chat.otherUserPhotoURL!)
+              : null,
+          child: chat.otherUserPhotoURL == null
+              ? const Icon(Icons.person)
+              : null,
+        ),
+        title: Text(
+          chat.otherUserName,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 4),
+            Text(
+              '${chat.ride.origin.address?.split(',').first ?? "Origem"} → ${chat.ride.destination.address?.split(',').first ?? "Destino"}',
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              timeStr,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[500],
+              ),
+            ),
+          ],
+        ),
+        trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+        onTap: () {
+          Navigator.pushNamed(
+            context,
+            '/chat',
+            arguments: {
+              'ride': chat.ride,
+              'isDriver': chat.isDriver,
+              'otherUserName': chat.otherUserName,
+              'otherUserPhotoURL': chat.otherUserPhotoURL,
+              'otherUserId': chat.otherUserId,
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  /// Constrói a tela de viagens (placeholder)
+  Widget _buildTripsScreen() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.explore_outlined,
+            size: 80,
+            color: Colors.grey[400],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Viagens',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[600],
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Esta funcionalidade estará disponível em breve!',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey,
+            ),
           ),
         ],
       ),
@@ -627,8 +1013,12 @@ class _HomeScreenState extends State<HomeScreen> {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
-              _showComingSoonDialog('Solicitar Carona');
+              _requestRide(ride);
             },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2196F3),
+              foregroundColor: Colors.white,
+            ),
             child: const Text('Solicitar'),
           ),
         ],
@@ -644,5 +1034,128 @@ class _HomeScreenState extends State<HomeScreen> {
       return '${duration.inMinutes}min';
     }
   }
+
+  /// Solicita uma carona
+  Future<void> _requestRide(Ride ride) async {
+    final authProvider = Provider.of<app_auth.AuthProvider>(context, listen: false);
+    final user = authProvider.user;
+
+    if (user == null) {
+      _showError('Você precisa estar logado para solicitar uma carona');
+      return;
+    }
+
+    // Verifica se há vagas disponíveis
+    if (ride.availableSeats <= 0) {
+      _showError('Não há vagas disponíveis nesta carona');
+      return;
+    }
+
+    // Mostra diálogo para confirmar solicitação
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Solicitar Carona'),
+        content: Text(
+          'Deseja solicitar uma vaga na carona de ${ride.driverName}?\n\n'
+          'Origem: ${ride.origin.address ?? 'Não informada'}\n'
+          'Destino: ${ride.destination.address ?? 'Não informado'}\n'
+          'Horário: ${DateFormat('dd/MM/yyyy às HH:mm').format(ride.dateTime)}',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2196F3),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Solicitar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    // Mostra loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    try {
+      // Cria solicitação de carona
+      final request = RideRequest(
+        id: '', // Será gerado pelo Firestore
+        rideId: ride.id,
+        passengerId: user.uid,
+        passengerName: user.displayNameOrEmail,
+        passengerPhotoURL: user.photoURL,
+        status: 'pending',
+        message: null,
+        createdAt: DateTime.now(),
+      );
+
+      final requestId = await _rideRequestService.createRequest(request);
+
+      if (mounted) {
+        Navigator.pop(context); // Fecha loading
+
+        if (requestId != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Solicitação enviada com sucesso! Aguarde a aprovação do motorista.'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        } else {
+          _showError('Erro ao enviar solicitação. Tente novamente.');
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Fecha loading
+        _showError('Erro ao solicitar carona: $e');
+      }
+    }
+  }
+
+  /// Exibe mensagem de erro
+  void _showError(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+}
+
+/// Modelo para item de conversa na lista
+class _ChatListItem {
+  final Ride ride;
+  final bool isDriver;
+  final String otherUserName;
+  final String? otherUserPhotoURL;
+  final String otherUserId;
+
+  _ChatListItem({
+    required this.ride,
+    required this.isDriver,
+    required this.otherUserName,
+    this.otherUserPhotoURL,
+    required this.otherUserId,
+  });
 }
 

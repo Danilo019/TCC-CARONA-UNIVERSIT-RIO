@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../config/maps_config.dart';
 import '../models/location.dart';
 import 'location_service.dart';
@@ -174,10 +175,11 @@ class GoogleMapsService {
   // DIRECTIONS API - Calcula rotas entre dois pontos
   // ===========================================================================
 
-  /// Obtém rota entre origem e destino
+  /// Obtém rota entre origem e destino, com pontos intermediários opcionais
   Future<Route?> getDirections({
     required Location origin,
     required Location destination,
+    List<Location>? waypoints, // Pontos intermediários (pontos de embarque)
     String travelMode = 'driving', // driving, walking, bicycling, transit
     bool avoidHighways = false,
     bool avoidTolls = false,
@@ -190,9 +192,19 @@ class GoogleMapsService {
 
       final avoidParam = avoid.isNotEmpty ? '&avoid=${avoid.join('|')}' : '';
       
+      // Constrói parâmetro de waypoints
+      String waypointsParam = '';
+      if (waypoints != null && waypoints.isNotEmpty) {
+        final waypointsStr = waypoints
+            .map((wp) => '${wp.latitude},${wp.longitude}')
+            .join('|');
+        waypointsParam = '&waypoints=$waypointsStr';
+      }
+      
       final url = Uri.parse(
         '$_baseUrl/directions/json?origin=${origin.latitude},${origin.longitude}'
         '&destination=${destination.latitude},${destination.longitude}'
+        '$waypointsParam'
         '&mode=$travelMode'
         '$avoidParam'
         '&key=$_apiKey',
@@ -207,29 +219,48 @@ class GoogleMapsService {
 
         if (data['status'] == 'OK' && data['routes'].isNotEmpty) {
           final route = data['routes'][0];
-          final leg = route['legs'][0];
+          final legs = route['legs'] as List;
 
-          // Distância total em km
-          final distance = (leg['distance']['value'] as int) / 1000.0;
+          // Soma distância e duração de todas as pernas
+          double totalDistance = 0;
+          int totalDurationSeconds = 0;
 
-          // Duração total
-          final durationSeconds = leg['duration']['value'] as int;
-          final duration = Duration(seconds: durationSeconds);
+          for (var leg in legs) {
+            totalDistance += (leg['distance']['value'] as int) / 1000.0;
+            totalDurationSeconds += leg['duration']['value'] as int;
+          }
 
-          // Waypoints da rota
+          final duration = Duration(seconds: totalDurationSeconds);
+
+          // Extrai waypoints da polyline (pontos da rota)
           final waypointsList = <Location>[];
           
-          // Decodifica polyline (simplificado - na prática, use um decoder)
-          // Por enquanto, retorna apenas origem e destino
+          // Adiciona origem
           waypointsList.add(origin);
           
-          // Pode decodificar polyline aqui para obter todos os pontos
-          // Por simplicidade, retornamos apenas origem e destino
+          // Adiciona pontos intermediários se houver
+          if (waypoints != null && waypoints.isNotEmpty) {
+            waypointsList.addAll(waypoints);
+          }
           
+          // Adiciona destino
           waypointsList.add(destination);
+          
+          // Tenta decodificar polyline para obter pontos da rota completa
+          // Por enquanto, retornamos os waypoints principais
+          if (route['overview_polyline'] != null) {
+            final encodedPolyline = route['overview_polyline']['points'] as String;
+            // Decodifica polyline (usando algoritmo simplificado)
+            final decodedPoints = _decodePolyline(encodedPolyline);
+            if (decodedPoints.isNotEmpty) {
+              // Combina waypoints principais com pontos da polyline
+              waypointsList.clear();
+              waypointsList.addAll(decodedPoints);
+            }
+          }
 
           return Route(
-            distanceKm: distance,
+            distanceKm: totalDistance,
             duration: duration,
             waypoints: waypointsList,
           );
@@ -237,6 +268,19 @@ class GoogleMapsService {
           if (kDebugMode) {
             print('✗ Directions falhou: ${data['status']}');
           }
+          
+          // Se a API não está disponível (REQUEST_DENIED, etc), usa cálculo local
+          final status = data['status'] as String;
+          if (status == 'REQUEST_DENIED' || 
+              status == 'OVER_QUERY_LIMIT' ||
+              status == 'ZERO_RESULTS' ||
+              status == 'NOT_FOUND') {
+            if (kDebugMode) {
+              print('⚠ API retornou: $status - usando cálculo local de rota como fallback');
+            }
+            return _calculateRouteLocal(origin, destination, waypoints);
+          }
+          
           return null;
         }
       } else {
@@ -251,6 +295,100 @@ class GoogleMapsService {
       }
       return null;
     }
+  }
+
+  /// Decodifica polyline do Google Maps para lista de coordenadas
+  List<Location> _decodePolyline(String encoded) {
+    final points = <Location>[];
+    int index = 0;
+    int lat = 0;
+    int lng = 0;
+
+    while (index < encoded.length) {
+      int shift = 0;
+      int result = 0;
+      int b;
+
+      // Decodifica latitude
+      do {
+        b = encoded.codeUnitAt(index++) - 63;
+        result |= (b & 0x1F) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+
+      int deltaLat = ((result & 1) != 0) ? ~(result >> 1) : (result >> 1);
+      lat += deltaLat;
+
+      // Decodifica longitude
+      shift = 0;
+      result = 0;
+
+      do {
+        b = encoded.codeUnitAt(index++) - 63;
+        result |= (b & 0x1F) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+
+      int deltaLng = ((result & 1) != 0) ? ~(result >> 1) : (result >> 1);
+      lng += deltaLng;
+
+      points.add(Location(
+        latitude: lat / 1e5,
+        longitude: lng / 1e5,
+      ));
+    }
+
+    return points;
+  }
+
+  /// Calcula rota localmente quando API não está disponível (fallback)
+  Route _calculateRouteLocal(
+    Location origin,
+    Location destination,
+    List<Location>? waypoints,
+  ) {
+    final waypointsList = <Location>[];
+    
+    // Adiciona origem
+    waypointsList.add(origin);
+    
+    // Adiciona pontos intermediários se houver
+    if (waypoints != null && waypoints.isNotEmpty) {
+      waypointsList.addAll(waypoints);
+    }
+    
+    // Adiciona destino
+    waypointsList.add(destination);
+    
+    // Calcula distância total (linha reta entre pontos)
+    double totalDistance = 0;
+    for (int i = 0; i < waypointsList.length - 1; i++) {
+      final distance = LocationService.calculateDistance(
+        waypointsList[i].latitude,
+        waypointsList[i].longitude,
+        waypointsList[i + 1].latitude,
+        waypointsList[i + 1].longitude,
+      );
+      totalDistance += distance;
+    }
+    
+    // Estima tempo (assumindo velocidade média de 40 km/h considerando curvas e trânsito)
+    // Multiplica por 1.3 para considerar que estradas não são linha reta
+    final estimatedDistance = totalDistance * 1.3;
+    final averageSpeed = 40.0; // km/h
+    final hours = estimatedDistance / averageSpeed;
+    final duration = Duration(seconds: (hours * 3600).round());
+    
+    if (kDebugMode) {
+      print('✓ Rota calculada localmente: ${estimatedDistance.toStringAsFixed(2)} km (estimado)');
+      print('✓ Tempo estimado: ${duration.inMinutes} min');
+    }
+    
+    return Route(
+      distanceKm: estimatedDistance,
+      duration: duration,
+      waypoints: waypointsList,
+    );
   }
 
   // ===========================================================================
@@ -428,6 +566,62 @@ class GoogleMapsService {
     }
 
     return nearest;
+  }
+
+  // ===========================================================================
+  // NAVEGAÇÃO EXTERNA - Abre Google Maps para navegação
+  // ===========================================================================
+
+  /// Abre navegação no Google Maps usando origem e destino
+  /// Usa a origem definida na carona, não a localização atual do usuário
+  Future<bool> launchNavigation({
+    required Location origin,
+    required Location destination,
+  }) async {
+    try {
+      // Formata coordenadas para URL do Google Maps
+      final originStr = '${origin.latitude},${origin.longitude}';
+      final destinationStr = '${destination.latitude},${destination.longitude}';
+      
+      // URL para navegação no Google Maps
+      // Usa com.google.android.apps.maps para Android e maps.apple.com para iOS
+      final url = Uri.parse(
+        'https://www.google.com/maps/dir/?api=1&origin=$originStr&destination=$destinationStr&travelmode=driving',
+      );
+
+      if (kDebugMode) {
+        print('🧭 Abrindo navegação do Google Maps...');
+        print('  Origem: $originStr');
+        print('  Destino: $destinationStr');
+      }
+
+      if (await canLaunchUrl(url)) {
+        final launched = await launchUrl(
+          url,
+          mode: LaunchMode.externalApplication,
+        );
+        
+        if (kDebugMode) {
+          if (launched) {
+            print('✓ Navegação aberta com sucesso');
+          } else {
+            print('✗ Não foi possível abrir navegação');
+          }
+        }
+        
+        return launched;
+      } else {
+        if (kDebugMode) {
+          print('✗ Não é possível abrir URL: $url');
+        }
+        return false;
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('✗ Erro ao abrir navegação: $e');
+      }
+      return false;
+    }
   }
 }
 

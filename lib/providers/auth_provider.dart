@@ -149,6 +149,22 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
+  /// Recarrega dados do usuário (útil após verificar email)
+  Future<void> refreshUser() async {
+    try {
+      await _authService.reloadUser();
+      
+      // Atualiza dados do usuário
+      final firebaseUser = _authService.currentUser;
+      if (firebaseUser != null) {
+        _user = AuthUser.fromFirebaseUser(firebaseUser);
+        notifyListeners();
+      }
+    } catch (e) {
+      _setError('Erro ao recarregar usuário: $e');
+    }
+  }
+
   /// Define o status e notifica listeners
   void _setStatus(AuthStatus status) {
     _status = status;

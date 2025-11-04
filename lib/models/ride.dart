@@ -1,4 +1,5 @@
 import 'location.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// Modelo para representar uma carona
 class Ride {
@@ -8,6 +9,7 @@ class Ride {
   final String? driverPhotoURL;
   final Location origin;
   final Location destination;
+  final List<Location> pickupPoints; // Pontos de embarque definidos pelo motorista
   final DateTime dateTime;
   final int maxSeats;
   final int availableSeats;
@@ -24,6 +26,7 @@ class Ride {
     this.driverPhotoURL,
     required this.origin,
     required this.destination,
+    this.pickupPoints = const [],
     required this.dateTime,
     required this.maxSeats,
     required this.availableSeats,
@@ -36,25 +39,55 @@ class Ride {
 
   /// Cria uma Ride a partir de um DocumentSnapshot do Firestore
   factory Ride.fromFirestore(dynamic doc) {
-    final data = doc.data() as Map<String, dynamic>;
-    return Ride(
-      id: doc.id,
-      driverId: data['driverId'] ?? '',
-      driverName: data['driverName'] ?? '',
-      driverPhotoURL: data['driverPhotoURL'],
-      origin: Location.fromMap(data['origin'] ?? {}),
-      destination: Location.fromMap(data['destination'] ?? {}),
-      dateTime: (data['dateTime'] as dynamic).toDate(),
-      maxSeats: data['maxSeats'] ?? 1,
-      availableSeats: data['availableSeats'] ?? 0,
-      description: data['description'],
-      price: data['price']?.toDouble(),
-      status: data['status'] ?? 'active',
-      createdAt: (data['createdAt'] as dynamic).toDate(),
-      updatedAt: data['updatedAt'] != null 
-          ? (data['updatedAt'] as dynamic).toDate() 
-          : null,
-    );
+    try {
+      final data = doc.data() as Map<String, dynamic>;
+      
+      // Helper para converter Timestamp para DateTime
+      DateTime parseDateTime(dynamic value) {
+        if (value == null) return DateTime.now();
+        if (value is DateTime) return value;
+        if (value is Timestamp) return value.toDate();
+        if (value.toString().contains('Timestamp')) {
+          return (value as dynamic).toDate();
+        }
+        // Fallback: tenta parsear como string ou retorna agora
+        return DateTime.now();
+      }
+      
+      // Parse pickup points
+      List<Location> pickupPoints = [];
+      if (data['pickupPoints'] != null && data['pickupPoints'] is List) {
+        pickupPoints = (data['pickupPoints'] as List)
+            .map((item) => Location.fromMap(item as Map<String, dynamic>))
+            .toList();
+      }
+      
+      final ride = Ride(
+        id: doc.id,
+        driverId: data['driverId'] ?? '',
+        driverName: data['driverName'] ?? '',
+        driverPhotoURL: data['driverPhotoURL'],
+        origin: Location.fromMap(data['origin'] ?? {}),
+        destination: Location.fromMap(data['destination'] ?? {}),
+        pickupPoints: pickupPoints,
+        dateTime: parseDateTime(data['dateTime']),
+        maxSeats: (data['maxSeats'] as num?)?.toInt() ?? 1,
+        availableSeats: (data['availableSeats'] as num?)?.toInt() ?? 0,
+        description: data['description'],
+        price: data['price']?.toDouble(),
+        status: data['status'] ?? 'active',
+        createdAt: parseDateTime(data['createdAt']),
+        updatedAt: data['updatedAt'] != null 
+            ? parseDateTime(data['updatedAt']) 
+            : null,
+      );
+      
+      return ride;
+    } catch (e) {
+      // Em caso de erro, retorna uma carona inválida que será filtrada
+      // Isso evita que um erro em um documento quebre toda a query
+      throw Exception('Erro ao converter documento ${doc.id}: $e');
+    }
   }
 
   /// Converte Ride para Map (Firestore)
@@ -65,6 +98,7 @@ class Ride {
       'driverPhotoURL': driverPhotoURL,
       'origin': origin.toMap(),
       'destination': destination.toMap(),
+      'pickupPoints': pickupPoints.map((point) => point.toMap()).toList(),
       'dateTime': dateTime,
       'maxSeats': maxSeats,
       'availableSeats': availableSeats,
@@ -84,6 +118,7 @@ class Ride {
     String? driverPhotoURL,
     Location? origin,
     Location? destination,
+    List<Location>? pickupPoints,
     DateTime? dateTime,
     int? maxSeats,
     int? availableSeats,
@@ -100,6 +135,7 @@ class Ride {
       driverPhotoURL: driverPhotoURL ?? this.driverPhotoURL,
       origin: origin ?? this.origin,
       destination: destination ?? this.destination,
+      pickupPoints: pickupPoints ?? this.pickupPoints,
       dateTime: dateTime ?? this.dateTime,
       maxSeats: maxSeats ?? this.maxSeats,
       availableSeats: availableSeats ?? this.availableSeats,

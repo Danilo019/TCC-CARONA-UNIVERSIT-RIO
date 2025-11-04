@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import '../models/auth_token.dart';
 import 'firestore_service.dart';
+import 'email_service.dart';
 
 class TokenService {
   static final TokenService _instance = TokenService._internal();
@@ -10,6 +11,7 @@ class TokenService {
   TokenService._internal();
 
   final FirestoreService _firestoreService = FirestoreService();
+  final EmailService _emailService = EmailService();
 
   /// Gera um token único de 6 dígitos
   String _generateToken() {
@@ -118,35 +120,34 @@ class TokenService {
     }
   }
 
-  /// Simula o envio de email com token
-  /// Em produção, isso seria feito pelo backend
+  /// Envia email de ativação com token
+  /// Usa EmailService para envio real
   Future<bool> sendActivationEmail(String email, String token) async {
     try {
-      // Simula delay de envio
-      await Future.delayed(const Duration(seconds: 1));
+      // Extrai o nome do usuário do email (parte antes do @)
+      final userName = email.split('@').first;
 
-      if (kDebugMode) {
-        print('📧 Email enviado para $email com token: $token');
-        print('📧 Conteúdo do email:');
-        print('   Assunto: Ativação da conta - Carona Universitária');
-        print('   Token: $token');
-        print('   Válido por: 30 minutos');
+      // Envia email real usando EmailService
+      final emailSent = await _emailService.sendActivationEmail(
+        toEmail: email,
+        token: token,
+        userName: userName,
+      );
+
+      if (emailSent) {
+        if (kDebugMode) {
+          print('✓ Email de ativação enviado para: $email');
+          print('   Token: $token');
+          print('   Válido por: 30 minutos');
+        }
+      } else {
+        if (kDebugMode) {
+          print('⚠ Email não foi enviado. Verifique a configuração do EmailService.');
+          print('💡 Configure EmailJS, Resend ou Mailgun em lib/services/email_service.dart');
+        }
       }
 
-      // Em produção, fazer chamada para API de envio de email
-      // final response = await http.post(
-      //   Uri.parse('$_baseUrl/send-activation-email'),
-      //   headers: {'Content-Type': 'application/json'},
-      //   body: jsonEncode({
-      //     'email': email,
-      //     'token': token,
-      //   }),
-      // );
-
-      // return response.statusCode == 200;
-
-      // Por enquanto, sempre retorna sucesso (simulação)
-      return true;
+      return emailSent;
     } catch (e) {
       if (kDebugMode) {
         print('✗ Erro ao enviar email: $e');
@@ -233,6 +234,103 @@ class TokenService {
       return parts.isNotEmpty ? parts[0] : null;
     } catch (e) {
       return null;
+    }
+  }
+
+  /// Cria um token de reset de senha
+  Future<AuthToken> createPasswordResetToken(String email) async {
+    try {
+      // Valida o email
+      if (!_isValidUDFEmail(email)) {
+        throw Exception('Apenas emails @cs.udf.edu.br são permitidos');
+      }
+
+      // Gera token único
+      String token;
+      bool isUnique = false;
+      int attempts = 0;
+      const maxAttempts = 10;
+
+      do {
+        token = _generateToken();
+        attempts++;
+        
+        // Verifica se o token já existe no Firestore
+        final existingToken = await _firestoreService.getActivationToken(token);
+        isUnique = existingToken == null;
+        
+        if (attempts >= maxAttempts) {
+          throw Exception('Não foi possível gerar um token único após $maxAttempts tentativas');
+        }
+      } while (!isUnique);
+
+      // Cria o token com expiração de 30 minutos
+      final now = DateTime.now();
+      final expiresAt = now.add(const Duration(minutes: 30));
+
+      final authToken = AuthToken(
+        token: token,
+        email: email,
+        createdAt: now,
+        expiresAt: expiresAt,
+      );
+
+      // Salva no Firestore (pode usar o mesmo método de ativação)
+      await _firestoreService.saveActivationToken(authToken);
+
+      if (kDebugMode) {
+        print('✓ Token de reset de senha criado: $token para $email (expira em: $expiresAt)');
+      }
+
+      return authToken;
+    } catch (e) {
+      if (kDebugMode) {
+        print('✗ Erro ao criar token de reset: $e');
+      }
+      rethrow;
+    }
+  }
+
+  /// Envia email de reset de senha com token
+  /// Usa EmailService para envio real via EmailJS
+  Future<bool> sendPasswordResetEmail(String email, String token) async {
+    try {
+      // Extrai o nome do usuário do email (parte antes do @)
+      final userName = email.split('@').first;
+
+      // Como é um app mobile, não precisamos de link web
+      // O usuário irá colar o token diretamente no app
+      // Mantemos resetLink vazio ou apenas para referência
+      final resetLink = ''; // Não usado para app mobile
+
+      // Envia email real usando EmailService
+      // Passa o token para que apareça destacado no email
+      final emailSent = await _emailService.sendPasswordResetEmail(
+        toEmail: email,
+        resetLink: resetLink,
+        userName: userName,
+        token: token, // Token para aparecer no email
+      );
+
+      if (emailSent) {
+        if (kDebugMode) {
+          print('✓ Email de reset de senha enviado para: $email');
+          print('   Token: $token');
+          print('   Válido por: 30 minutos');
+        }
+      } else {
+        if (kDebugMode) {
+          print('⚠ Email não foi enviado. Verifique a configuração do EmailService.');
+          print('💡 Configure EmailJS, Resend ou Mailgun em lib/services/email_service.dart');
+        }
+      }
+
+      return emailSent;
+    } catch (e) {
+      if (kDebugMode) {
+        print('✗ Erro ao enviar email de reset: $e');
+      }
+      return false;
     }
   }
 }

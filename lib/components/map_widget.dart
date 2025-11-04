@@ -13,6 +13,8 @@ class MapWidget extends StatefulWidget {
   final Function(Location)? onMapTap;
   final bool showUserLocation;
   final bool showRideMarkers;
+  final List<Location>? routePoints; // Pontos da rota para exibir como polyline
+  final List<Location>? pickupPoints; // Pontos de embarque para exibir como marcadores especiais
 
   const MapWidget({
     super.key,
@@ -22,6 +24,8 @@ class MapWidget extends StatefulWidget {
     this.onMapTap,
     this.showUserLocation = true,
     this.showRideMarkers = true,
+    this.routePoints,
+    this.pickupPoints,
   });
 
   @override
@@ -34,6 +38,8 @@ class _MapWidgetState extends State<MapWidget> {
 
   // Conjunto de marcadores
   final Set<Marker> _markers = {};
+  // Conjunto de polylines (rotas)
+  final Set<Polyline> _polylines = {};
 
   @override
   void initState() {
@@ -48,6 +54,11 @@ class _MapWidgetState extends State<MapWidget> {
     // Atualiza marcadores quando a lista de caronas mudar
     if (widget.rides != oldWidget.rides) {
       _updateMarkers();
+    }
+
+    // Atualiza rota quando mudar
+    if (widget.routePoints != oldWidget.routePoints) {
+      _updateRoute();
     }
 
     // Move a câmera se a localização inicial mudou
@@ -85,17 +96,42 @@ class _MapWidgetState extends State<MapWidget> {
     
     // Atualiza marcadores após inicializar
     _updateMarkers();
+    _updateRoute();
   }
 
   /// Atualiza os marcadores no mapa baseado nas caronas
   void _updateMarkers() {
-    if (!widget.showRideMarkers) return;
+    if (!widget.showRideMarkers) {
+      if (kDebugMode) {
+        print('📍 Marcadores de caronas desabilitados');
+      }
+      return;
+    }
 
     _markers.clear();
 
+    if (kDebugMode) {
+      print('📍 Atualizando marcadores: ${widget.rides.length} caronas');
+    }
+
     // Adiciona marcadores para cada carona
+    int markersAdded = 0;
     for (var ride in widget.rides) {
-      if (!ride.isAvailable) continue;
+      // Verifica se a carona está disponível
+      if (!ride.isAvailable) {
+        if (kDebugMode) {
+          print('  ⏭ Pulando carona ${ride.id}: status=${ride.status}, vagas=${ride.availableSeats}');
+        }
+        continue;
+      }
+
+      // Verifica se a localização é válida
+      if (!ride.origin.isValid) {
+        if (kDebugMode) {
+          print('  ⚠ Localização inválida para carona ${ride.id}');
+        }
+        continue;
+      }
 
       final marker = Marker(
         markerId: MarkerId(ride.id),
@@ -116,11 +152,133 @@ class _MapWidgetState extends State<MapWidget> {
       );
 
       _markers.add(marker);
+      markersAdded++;
+    }
+
+    if (kDebugMode) {
+      print('✓ $markersAdded marcadores adicionados ao mapa');
     }
 
     if (mounted) {
       setState(() {});
     }
+  }
+
+  /// Atualiza a rota no mapa (polyline)
+  void _updateRoute() {
+    _polylines.clear();
+
+    if (widget.routePoints == null || widget.routePoints!.isEmpty) {
+      if (mounted) {
+        setState(() {});
+      }
+      return;
+    }
+
+    // Converte pontos da rota para LatLng
+    final points = widget.routePoints!
+        .map((location) => LatLng(location.latitude, location.longitude))
+        .toList();
+
+    // Cria polyline da rota
+    final polyline = Polyline(
+      polylineId: const PolylineId('route'),
+      points: points,
+      color: const Color(0xFF2196F3),
+      width: 5,
+      patterns: [],
+    );
+
+    _polylines.add(polyline);
+
+    // Adiciona marcadores para pontos de embarque
+    if (widget.pickupPoints != null && widget.pickupPoints!.isNotEmpty) {
+      int pickupIndex = 0;
+      for (var pickupPoint in widget.pickupPoints!) {
+        final marker = Marker(
+          markerId: MarkerId('pickup_$pickupIndex'),
+          position: LatLng(pickupPoint.latitude, pickupPoint.longitude),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
+          infoWindow: InfoWindow(
+            title: 'Ponto de Embarque ${pickupIndex + 1}',
+            snippet: pickupPoint.address ?? '',
+          ),
+        );
+        _markers.add(marker);
+        pickupIndex++;
+      }
+    }
+
+    // Adiciona marcadores para origem e destino se a rota está sendo exibida
+    if (widget.routePoints!.isNotEmpty) {
+      final origin = widget.routePoints!.first;
+      final destination = widget.routePoints!.last;
+
+      // Marcador de origem
+      _markers.add(
+        Marker(
+          markerId: const MarkerId('origin'),
+          position: LatLng(origin.latitude, origin.longitude),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+          infoWindow: InfoWindow(
+            title: 'Origem',
+            snippet: origin.address ?? '',
+          ),
+        ),
+      );
+
+      // Marcador de destino
+      _markers.add(
+        Marker(
+          markerId: const MarkerId('destination'),
+          position: LatLng(destination.latitude, destination.longitude),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+          infoWindow: InfoWindow(
+            title: 'Destino',
+            snippet: destination.address ?? '',
+          ),
+        ),
+      );
+
+      // Ajusta câmera para mostrar toda a rota
+      _fitBounds();
+    }
+
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  /// Ajusta a câmera para mostrar toda a rota
+  void _fitBounds() {
+    if (_mapController == null || widget.routePoints == null || widget.routePoints!.isEmpty) {
+      return;
+    }
+
+    final points = widget.routePoints!
+        .map((location) => LatLng(location.latitude, location.longitude))
+        .toList();
+
+    double minLat = points.first.latitude;
+    double maxLat = points.first.latitude;
+    double minLng = points.first.longitude;
+    double maxLng = points.first.longitude;
+
+    for (var point in points) {
+      if (point.latitude < minLat) minLat = point.latitude;
+      if (point.latitude > maxLat) maxLat = point.latitude;
+      if (point.longitude < minLng) minLng = point.longitude;
+      if (point.longitude > maxLng) maxLng = point.longitude;
+    }
+
+    final bounds = LatLngBounds(
+      southwest: LatLng(minLat, minLng),
+      northeast: LatLng(maxLat, maxLng),
+    );
+
+    _mapController!.animateCamera(
+      CameraUpdate.newLatLngBounds(bounds, 100.0),
+    );
   }
 
   /// Move a câmera para uma localização específica
@@ -175,6 +333,7 @@ class _MapWidgetState extends State<MapWidget> {
         }
       },
       markers: _markers,
+      polylines: _polylines,
       myLocationEnabled: widget.showUserLocation,
       myLocationButtonEnabled: widget.showUserLocation,
       zoomControlsEnabled: true,

@@ -23,44 +23,118 @@ class RidesService {
     return _ridesCollection
         .where('status', isEqualTo: 'active')
         .where('availableSeats', isGreaterThan: 0)
-        .orderBy('availableSeats')
         .orderBy('dateTime')
         .snapshots()
         .map((snapshot) {
       if (kDebugMode) {
-        print('✓ ${snapshot.docs.length} caronas ativas encontradas');
+        print('✓ ${snapshot.docs.length} caronas ativas encontradas (stream)');
       }
       
-      return snapshot.docs
-          .map((doc) => Ride.fromFirestore(doc))
+      final rides = snapshot.docs
+          .map((doc) {
+            try {
+              return Ride.fromFirestore(doc);
+            } catch (e) {
+              if (kDebugMode) {
+                print('✗ Erro ao converter documento ${doc.id}: $e');
+              }
+              return null;
+            }
+          })
+          .whereType<Ride>()
           .toList();
+      
+      // Ordena por vagas disponíveis
+      rides.sort((a, b) {
+        if (a.availableSeats != b.availableSeats) {
+          return b.availableSeats.compareTo(a.availableSeats);
+        }
+        return a.dateTime.compareTo(b.dateTime);
+      });
+      
+      return rides;
     });
   }
 
   /// Busca todas as caronas ativas
   Future<List<Ride>> getActiveRides() async {
     try {
+      // Query simplificada - usando apenas um orderBy para evitar necessidade de índice composto
+      // Filtra por status e vagas disponíveis, ordena por data
       final snapshot = await _ridesCollection
           .where('status', isEqualTo: 'active')
           .where('availableSeats', isGreaterThan: 0)
-          .orderBy('availableSeats')
           .orderBy('dateTime')
           .get();
 
       final rides = snapshot.docs
-          .map((doc) => Ride.fromFirestore(doc))
+          .map((doc) {
+            try {
+              return Ride.fromFirestore(doc);
+            } catch (e) {
+              if (kDebugMode) {
+                print('✗ Erro ao converter documento ${doc.id}: $e');
+                print('  Dados: ${doc.data()}');
+              }
+              return null;
+            }
+          })
+          .whereType<Ride>()
           .toList();
+
+      // Ordena por vagas disponíveis (em memória)
+      rides.sort((a, b) {
+        if (a.availableSeats != b.availableSeats) {
+          return b.availableSeats.compareTo(a.availableSeats); // Mais vagas primeiro
+        }
+        return a.dateTime.compareTo(b.dateTime); // Depois por data
+      });
 
       if (kDebugMode) {
         print('✓ ${rides.length} caronas ativas encontradas');
+        if (rides.isNotEmpty) {
+          print('  Primeira carona: ${rides.first.driverName} - ${rides.first.availableSeats} vagas');
+        }
       }
 
       return rides;
     } catch (e) {
       if (kDebugMode) {
         print('✗ Erro ao buscar caronas ativas: $e');
+        print('  Tentando query alternativa...');
       }
-      return [];
+      
+      // Fallback: busca sem filtros e filtra em memória
+      try {
+        final snapshot = await _ridesCollection
+            .where('status', isEqualTo: 'active')
+            .get();
+        
+        final rides = snapshot.docs
+            .map((doc) {
+              try {
+                final ride = Ride.fromFirestore(doc);
+                return ride.availableSeats > 0 ? ride : null;
+              } catch (e) {
+                return null;
+              }
+            })
+            .whereType<Ride>()
+            .toList();
+        
+        rides.sort((a, b) => a.dateTime.compareTo(b.dateTime));
+        
+        if (kDebugMode) {
+          print('✓ ${rides.length} caronas encontradas (fallback)');
+        }
+        
+        return rides;
+      } catch (e2) {
+        if (kDebugMode) {
+          print('✗ Erro na query fallback: $e2');
+        }
+        return [];
+      }
     }
   }
 
@@ -135,16 +209,35 @@ class RidesService {
   /// Cria uma nova carona
   Future<String?> createRide(Ride ride) async {
     try {
-      final docRef = await _ridesCollection.add(ride.toMap());
+      // Converte DateTime para Timestamp do Firestore
+      final rideMap = ride.toMap();
+      rideMap['dateTime'] = Timestamp.fromDate(ride.dateTime);
+      rideMap['createdAt'] = Timestamp.fromDate(ride.createdAt);
+      if (ride.updatedAt != null) {
+        rideMap['updatedAt'] = Timestamp.fromDate(ride.updatedAt!);
+      }
       
       if (kDebugMode) {
-        print('✓ Carona criada: ${docRef.id}');
+        print('📝 Criando carona:');
+        print('  Driver: ${ride.driverName}');
+        print('  Origem: ${ride.origin.address ?? '${ride.origin.latitude}, ${ride.origin.longitude}'}');
+        print('  Destino: ${ride.destination.address ?? '${ride.destination.latitude}, ${ride.destination.longitude}'}');
+        print('  Vagas: ${ride.availableSeats}/${ride.maxSeats}');
+        print('  Status: ${ride.status}');
+        print('  Data/Hora: ${ride.dateTime}');
+      }
+      
+      final docRef = await _ridesCollection.add(rideMap);
+      
+      if (kDebugMode) {
+        print('✓ Carona criada com sucesso: ${docRef.id}');
       }
 
       return docRef.id;
-    } catch (e) {
+    } catch (e, stackTrace) {
       if (kDebugMode) {
         print('✗ Erro ao criar carona: $e');
+        print('  Stack trace: $stackTrace');
       }
       return null;
     }

@@ -177,13 +177,7 @@ class _LoginPageState extends State<LoginPage> {
                           alignment: Alignment.centerRight,
                           child: TextButton(
                             onPressed: () {
-                              // TODO: Implementar recuperação de senha
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Funcionalidade em desenvolvimento'),
-                                  backgroundColor: Colors.orange,
-                                ),
-                              );
+                              Navigator.pushNamed(context, '/forgot-password');
                             },
                             child: const Text(
                               'Esqueceu sua senha?',

@@ -93,6 +93,46 @@ class FirestoreService {
     }
   }
 
+  /// Atualiza informações do perfil do usuário
+  Future<void> updateUserProfile({
+    required String uid,
+    String? displayName,
+    String? photoURL,
+  }) async {
+    try {
+      final updateData = <String, dynamic>{};
+      
+      if (displayName != null) {
+        updateData['displayName'] = displayName;
+      }
+      
+      if (photoURL != null) {
+        updateData['photoURL'] = photoURL;
+      }
+
+      if (updateData.isEmpty) {
+        if (kDebugMode) {
+          print('⚠ Nenhum dado para atualizar');
+        }
+        return;
+      }
+
+      updateData['updatedAt'] = FieldValue.serverTimestamp();
+
+      await _usersCollection.doc(uid).update(updateData);
+
+      if (kDebugMode) {
+        print('✓ Perfil atualizado: $uid');
+        print('  Dados: $updateData');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('✗ Erro ao atualizar perfil: $e');
+      }
+      rethrow;
+    }
+  }
+
   /// Stream de mudanças em um usuário específico
   Stream<AuthUser?> watchUser(String uid) {
     return _usersCollection.doc(uid).snapshots().map((doc) {

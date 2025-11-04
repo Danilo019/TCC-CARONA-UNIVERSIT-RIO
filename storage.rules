@@ -1,0 +1,76 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Regra auxiliar: verifica se o usuário está autenticado
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Regra auxiliar: verifica se o usuário é o dono do arquivo
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // ===========================================================================
+    // FOTOS DE PERFIL DE USUÁRIOS
+    // ===========================================================================
+    
+    // Permite que usuários autenticados façam upload de suas próprias fotos de perfil
+    match /users/{userId}/profile_photo.jpg {
+      allow read: if isAuthenticated(); // Qualquer usuário autenticado pode ler
+      allow write: if isOwner(userId);   // Apenas o dono pode escrever/deletar
+      allow delete: if isOwner(userId);  // Apenas o dono pode deletar
+    }
+    
+    // Permite upload de outras imagens de perfil (PNG, etc.)
+    match /users/{userId}/profile_photo.png {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId);
+      allow delete: if isOwner(userId);
+    }
+    
+    match /users/{userId}/profile_photo.jpeg {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId);
+      allow delete: if isOwner(userId);
+    }
+    
+    match /users/{userId}/profile_photo.webp {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId);
+      allow delete: if isOwner(userId);
+    }
+    
+    // ===========================================================================
+    // FOTOS DE VEÍCULOS
+    // ===========================================================================
+    
+    match /vehicles/{driverId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(driverId);
+      allow delete: if isOwner(driverId);
+    }
+    
+    // ===========================================================================
+    // DOCUMENTOS (CNH, CRLV, etc.)
+    // ===========================================================================
+    
+    match /documents/{driverId}/{fileName} {
+      allow read: if isOwner(driverId);  // Apenas o dono pode ler documentos
+      allow write: if isOwner(driverId);
+      allow delete: if isOwner(driverId);
+    }
+    
+    // ===========================================================================
+    // OUTROS ARQUIVOS (para futuras funcionalidades)
+    // ===========================================================================
+    
+    // Por padrão, nega acesso a qualquer outro arquivo
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
