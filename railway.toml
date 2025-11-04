@@ -1,0 +1,12 @@
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+startCommand = "cd backend && npm start"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+# Força o Railway a usar Nixpacks em vez de Railpack
+[providers]
+railway = true
+
