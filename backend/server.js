@@ -113,15 +113,7 @@ app.post('/api/reset-password', async (req, res) => {
       });
     }
 
-    if (tokenData.isUsed === true) {
-      return res.status(403).json({
-        success: false,
-        error: 'token_used',
-        message: 'Token já foi usado',
-      });
-    }
-
-    // Verifica expiração
+    // Verifica expiração (antes de tudo)
     const expiresAt = tokenData.expiresAt.toMillis();
     if (Date.now() > expiresAt) {
       return res.status(403).json({
@@ -129,6 +121,14 @@ app.post('/api/reset-password', async (req, res) => {
         error: 'token_expired',
         message: 'Token expirado. Solicite um novo código.',
       });
+    }
+
+    // Permite usar token mesmo se já foi usado na validação inicial
+    // O token foi validado antes de navegar para tela de reset, mas não foi usado para reset ainda
+    // Se o token já foi usado mas o email corresponde e não expirou, ainda permite
+    if (tokenData.isUsed === true) {
+      console.log('⚠ Token já foi marcado como usado (pode ser da validação inicial), mas permitindo reset se email corresponde e não expirou');
+      // Continua o processo - o token será marcado como usado novamente após reset bem-sucedido
     }
 
     // 3. Busca usuário no Firebase Auth

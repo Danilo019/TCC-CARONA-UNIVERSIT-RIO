@@ -49,7 +49,7 @@ class FirebaseConfig {
   // - Heroku: 'https://carona-universitaria-backend.herokuapp.com'
   // - Vercel: 'https://carona-universitaria-backend.vercel.app'
   // - Railway: 'https://carona-universitaria-backend.railway.app'
-  static const String? backendUrl = null; // Configure a URL aqui após deploy
+  static const String? backendUrl = 'https://tcc-carona-universit-rio-production.up.railway.app'; // Configure a URL aqui após deploy
 
   // Método para obter configurações baseado no ambiente
   static Map<String, dynamic> getConfig({bool isProduction = false}) {

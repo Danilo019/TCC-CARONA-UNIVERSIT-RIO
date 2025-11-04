@@ -205,6 +205,59 @@ class FirestoreService {
   }
 
   /// Valida e marca um token como usado
+  /// Valida um token sem marcar como usado (para validação inicial)
+  Future<bool> validateTokenOnly(String token, String email) async {
+    try {
+      final doc = await _tokensCollection.doc(token).get();
+
+      if (!doc.exists) {
+        if (kDebugMode) {
+          print('✗ Token não encontrado: $token');
+        }
+        return false;
+      }
+
+      final data = doc.data() as Map<String, dynamic>;
+      
+      // Verifica email
+      if (data['email'] != email) {
+        if (kDebugMode) {
+          print('✗ Email não confere: ${data['email']} != $email');
+        }
+        return false;
+      }
+
+      // Verifica se já foi usado
+      if (data['isUsed'] == true) {
+        if (kDebugMode) {
+          print('✗ Token já usado: $token');
+        }
+        return false;
+      }
+
+      // Verifica expiração
+      final expiresAt = (data['expiresAt'] as Timestamp).toDate();
+      if (DateTime.now().isAfter(expiresAt)) {
+        if (kDebugMode) {
+          print('✗ Token expirado: $token');
+        }
+        return false;
+      }
+
+      if (kDebugMode) {
+        print('✓ Token válido (não marcado como usado): $token');
+      }
+
+      return true;
+    } catch (e) {
+      if (kDebugMode) {
+        print('✗ Erro ao validar token: $e');
+      }
+      return false;
+    }
+  }
+
+  /// Valida um token e marca como usado (para uso final)
   Future<bool> validateAndUseToken(String token, String email) async {
     try {
       final doc = await _tokensCollection.doc(token).get();

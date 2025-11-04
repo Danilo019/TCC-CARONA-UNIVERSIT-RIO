@@ -78,14 +78,15 @@ class TokenService {
     }
   }
 
-  /// Valida um token de ativação
+  /// Valida um token de ativação (sem marcar como usado)
+  /// Use este método para validação inicial antes de navegar para tela de reset
   Future<bool> validateToken(String token, String email) async {
     try {
-      // Usa o FirestoreService para validar e marcar como usado
-      final isValid = await _firestoreService.validateAndUseToken(token, email);
+      // Valida sem marcar como usado (será marcado quando o reset for bem-sucedido)
+      final isValid = await _firestoreService.validateTokenOnly(token, email);
       
       if (kDebugMode && isValid) {
-        print('✓ Token validado com sucesso: $token');
+        print('✓ Token validado com sucesso (aguardando reset): $token');
       }
       
       return isValid;
@@ -94,6 +95,27 @@ class TokenService {
         print('✗ Erro ao validar token: $e');
       }
       return false;
+    }
+  }
+
+  /// Marca um token como usado (para ser chamado após reset bem-sucedido)
+  /// O backend já marca como usado, mas este método serve como backup
+  Future<void> markTokenAsUsed(String token) async {
+    try {
+      final doc = await _firestoreService.getActivationToken(token);
+      if (doc != null && !doc.isUsed) {
+        // Usa o método validateAndUseToken para marcar como usado
+        // Isso garante que a marcação seja feita corretamente
+        await _firestoreService.validateAndUseToken(token, doc.email);
+        if (kDebugMode) {
+          print('✓ Token marcado como usado (backup): $token');
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('⚠ Erro ao marcar token como usado: $e');
+      }
+      // Não lança exceção - o backend já marca como usado
     }
   }
 

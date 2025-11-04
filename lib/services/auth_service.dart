@@ -343,6 +343,11 @@ class AuthService {
             print('📡 Chamando Backend API para reset de senha...');
           }
 
+          final uri = Uri.parse(backendUrl);
+          if (!uri.hasScheme) {
+            throw Exception('URL do backend inválida. Verifique a configuração em FirebaseConfig.');
+          }
+
           final response = await http.post(
             Uri.parse('$backendUrl/api/reset-password'),
             headers: {
@@ -368,7 +373,22 @@ class AuthService {
             }
             return;
           } else {
-            final errorMessage = responseData['message'] ?? 'Erro ao redefinir senha';
+            // Extrai mensagem de erro específica do backend
+            final errorMessage = responseData['message'] ?? 
+                                responseData['error'] ?? 
+                                'Erro ao redefinir senha';
+            
+            // Trata erros específicos do backend
+            if (response.statusCode == 404 || 
+                errorMessage.toString().toLowerCase().contains('não encontrado') ||
+                errorMessage.toString().toLowerCase().contains('not found')) {
+              throw Exception('Token invalido ou expirado. Por favor solicite um novo código.');
+            } else if (response.statusCode == 403 || 
+                       errorMessage.toString().toLowerCase().contains('expirado') ||
+                       errorMessage.toString().toLowerCase().contains('expired')) {
+              throw Exception('Token invalido ou expirado. Por favor solicite um novo código.');
+            }
+            
             throw Exception(errorMessage);
           }
         } catch (e) {
@@ -413,7 +433,7 @@ class AuthService {
         
         switch (e.code) {
           case 'not-found':
-            errorMessage = 'Token inválido ou não encontrado. Solicite um novo código.';
+            errorMessage = 'Token invalido ou expirado. Por favor solicite um novo código.';
             break;
           case 'permission-denied':
             errorMessage = 'Token já foi usado ou não corresponde ao email.';
