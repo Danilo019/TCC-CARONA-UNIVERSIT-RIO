@@ -579,6 +579,14 @@ class ProfileScreen extends StatelessWidget {
           ),
           _buildDivider(),
           _buildActionTile(
+            icon: Icons.star_rate,
+            label: 'Avaliações',
+            onTap: () {
+              Navigator.of(context).pushNamed('/avaliacoes');
+            },
+          ),
+          _buildDivider(),
+          _buildActionTile(
             icon: Icons.settings_outlined,
             label: 'Configurações',
             onTap: () {

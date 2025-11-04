@@ -176,13 +176,43 @@ class _SearchRideScreenState extends State<SearchRideScreen> {
     }).toList();
   }
 
-  /// Reserva uma vaga na carona
+  /// Solicita uma vaga na carona (cria solicitação para o motorista aceitar/rejeitar)
   Future<void> _reserveRide(Ride ride) async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final user = authProvider.user;
+
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Você precisa estar logado para solicitar uma carona'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Verifica se há vagas disponíveis
+    if (ride.availableSeats <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Não há vagas disponíveis nesta carona'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // Mostra diálogo para confirmar solicitação
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Confirmar Reserva'),
-        content: Text('Deseja reservar 1 vaga na carona de ${ride.driverName}?'),
+        title: const Text('Solicitar Carona'),
+        content: Text(
+          'Deseja solicitar uma vaga na carona de ${ride.driverName}?\n\n'
+          'Origem: ${ride.origin.address ?? 'Não informada'}\n'
+          'Destino: ${ride.destination.address ?? 'Não informado'}\n'
+          'Horário: ${DateFormat('dd/MM/yyyy às HH:mm').format(ride.dateTime)}',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -194,58 +224,70 @@ class _SearchRideScreenState extends State<SearchRideScreen> {
               backgroundColor: const Color(0xFF2196F3),
               foregroundColor: Colors.white,
             ),
-            child: const Text('Confirmar'),
+            child: const Text('Solicitar'),
           ),
         ],
       ),
     );
 
-    if (confirmed == true && mounted) {
-      // Mostra loading
-      if (!mounted) return;
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const Center(
-          child: CircularProgressIndicator(),
-        ),
+    if (confirmed != true || !mounted) return;
+
+    // Mostra loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    try {
+      // Cria solicitação de carona (não reserva diretamente)
+      final request = RideRequest(
+        id: '', // Será gerado pelo Firestore
+        rideId: ride.id,
+        passengerId: user.uid,
+        passengerName: user.displayNameOrEmail,
+        passengerPhotoURL: user.photoURL,
+        status: 'pending',
+        message: null,
+        createdAt: DateTime.now(),
       );
 
-      try {
-        final success = await _ridesService.reserveSeat(ride.id);
-        
-        if (mounted) {
-          Navigator.pop(context); // Fecha loading
-          
-          if (success) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Vaga reservada com sucesso!'),
-                backgroundColor: Colors.green,
-              ),
-            );
-            
-            // Atualiza lista
-            await _loadRides();
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Não foi possível reservar a vaga'),
-                backgroundColor: Colors.orange,
-              ),
-            );
-          }
-        }
-      } catch (e) {
-        if (mounted) {
-          Navigator.pop(context); // Fecha loading
+      final requestId = await _requestService.createRequest(request);
+
+      if (mounted) {
+        Navigator.pop(context); // Fecha loading
+
+        if (requestId != null) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Erro ao reservar: $e'),
+            const SnackBar(
+              content: Text('Solicitação enviada com sucesso! Aguarde a aprovação do motorista.'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 3),
+            ),
+          );
+          
+          // Atualiza lista
+          await _loadRides();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Erro ao enviar solicitação. Tente novamente.'),
               backgroundColor: Colors.red,
             ),
           );
         }
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Fecha loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao solicitar carona: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }
@@ -626,7 +668,7 @@ class _SearchRideScreenState extends State<SearchRideScreen> {
 
               const SizedBox(height: 16),
 
-              // Botão de reservar
+              // Botão de solicitar carona
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -643,7 +685,7 @@ class _SearchRideScreenState extends State<SearchRideScreen> {
                   ),
                   child: Text(
                     ride.availableSeats > 0 
-                        ? 'Reservar Vaga' 
+                        ? 'Solicitar Carona' 
                         : 'Sem Vagas',
                     style: const TextStyle(
                       fontSize: 16,
@@ -942,7 +984,7 @@ class _RideDetailsBottomSheet extends StatelessWidget {
             const SizedBox(height: 12),
           ],
 
-          // Botão de reservar
+          // Botão de solicitar carona
           SizedBox(
             width: double.infinity,
             height: 56,
@@ -961,7 +1003,7 @@ class _RideDetailsBottomSheet extends StatelessWidget {
                 acceptedRequest != null
                     ? 'Solicitação Aceita'
                     : ride.availableSeats > 0 
-                        ? 'Reservar Vaga'
+                        ? 'Solicitar Carona'
                         : 'Sem Vagas',
                 style: const TextStyle(
                   fontSize: 18,

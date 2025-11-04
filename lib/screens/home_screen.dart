@@ -6,10 +6,12 @@ import '../components/map_widget.dart';
 import '../models/ride.dart';
 import '../models/location.dart';
 import '../models/ride_request.dart';
+import '../models/chat_message.dart';
 import '../services/location_service.dart';
 import '../services/google_maps_service.dart';
 import '../services/rides_service.dart';
 import '../services/ride_request_service.dart';
+import '../services/chat_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
@@ -18,7 +20,7 @@ import 'package:intl/intl.dart';
 /// 
 /// Exibe:
 /// - Saudação personalizada com botão de perfil
-/// - Dois botões de ação: "Oferecer Carona" e "Procurar Carona"
+/// - Dois botões de ação: "Motorista" e "Passageiro"
 /// - Mapa interativo com marcadores de caronas disponíveis
 /// - Navegação inferior com 4 opções: Início, Viagens, Mensagens, Perfil
 class HomeScreen extends StatefulWidget {
@@ -34,12 +36,14 @@ class _HomeScreenState extends State<HomeScreen> {
   final GoogleMapsService _googleMapsService = GoogleMapsService();
   final RidesService _ridesService = RidesService();
   final RideRequestService _rideRequestService = RideRequestService();
+  final ChatService _chatService = ChatService();
   Location? _userLocation;
   bool _isLoadingLocation = false;
   StreamSubscription<Position>? _locationSubscription;
   List<Ride> _rides = [];
   List<Ride> _myRides = []; // Caronas do motorista
   List<RideRequest> _acceptedRequests = []; // Solicitações aceitas (passageiro)
+  int _totalUnreadMessages = 0; // Total de mensagens não lidas
 
   @override
   void initState() {
@@ -47,6 +51,10 @@ class _HomeScreenState extends State<HomeScreen> {
     _initializeLocation();
     _loadRides();
     _loadChats();
+    // Atualiza contador de mensagens não lidas
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _updateUnreadCount();
+    });
   }
 
   /// Carrega conversas (caronas com solicitações aceitas)
@@ -368,16 +376,16 @@ class _HomeScreenState extends State<HomeScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(
         children: [
-          // Botão "Oferecer Carona"
+          // Botão "Motorista"
           Expanded(
             child: _buildActionButton(
-              label: 'Oferecer Carona',
-              icon: Icons.add_road,
+              label: 'Motorista',
+              icon: Icons.directions_car,
               color: const Color(0xFF2196F3),
               textColor: Colors.white,
               onTap: () async {
-                // Navega para tela de oferecer carona
-                final result = await Navigator.of(context).pushNamed('/offer-ride');
+                // Navega para tela de motorista
+                final result = await Navigator.of(context).pushNamed('/motorist');
                 // Atualiza o mapa se uma carona foi criada
                 if (result == true && mounted) {
                   await _loadRides();
@@ -388,16 +396,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
           const SizedBox(width: 16),
 
-          // Botão "Procurar Carona"
+          // Botão "Passageiro"
           Expanded(
             child: _buildActionButton(
-              label: 'Procurar Carona',
-              icon: Icons.search,
+              label: 'Passageiro',
+              icon: Icons.person,
               color: Colors.white,
               textColor: Colors.black87,
               onTap: () async {
-                // Navega para tela de procurar carona
-                await Navigator.of(context).pushNamed('/search-ride');
+                // Navega para tela de passageiro
+                await Navigator.of(context).pushNamed('/passenger');
                 // Recarrega caronas quando voltar
                 if (mounted) {
                   await _loadRides();
@@ -527,6 +535,8 @@ class _HomeScreenState extends State<HomeScreen> {
           } else if (index == 2) {
             // Mensagens - já carrega na tela
             _loadChats();
+            // Atualiza contador de não lidas
+            _updateUnreadCount();
           } else if (index == 1) {
             // Viagens
             _showComingSoonDialog('Viagens');
@@ -554,28 +564,63 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: Stack(
               children: [
                 const Icon(Icons.mail_outline),
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(
-                      color: Colors.orange,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Text(
-                      '3',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
+                if (_totalUnreadMessages > 0)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: Colors.orange,
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 16,
+                        minHeight: 16,
+                      ),
+                      child: Text(
+                        _totalUnreadMessages > 99 ? '99+' : _totalUnreadMessages.toString(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
                       ),
                     ),
                   ),
-                ),
               ],
             ),
-            activeIcon: const Icon(Icons.mail),
+            activeIcon: Stack(
+              children: [
+                const Icon(Icons.mail),
+                if (_totalUnreadMessages > 0)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: Colors.orange,
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 16,
+                        minHeight: 16,
+                      ),
+                      child: Text(
+                        _totalUnreadMessages > 99 ? '99+' : _totalUnreadMessages.toString(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
             label: 'Mensagens',
           ),
           const BottomNavigationBarItem(
@@ -599,101 +644,149 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    // Carrega conversas completas (com caronas encontradas)
-    return FutureBuilder<List<_ChatListItem>>(
-      future: _loadChatList(user.uid),
+    // Usa StreamBuilder para atualizar conversas em tempo real
+    return StreamBuilder<List<_ChatListItemWithStream>>(
+      stream: _watchChatList(user.uid),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        // Mostra loading apenas na primeira vez
+        if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
+        }
+
+        // Se há erro e não há dados, mostra mensagem
+        if (snapshot.hasError && !snapshot.hasData) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.error_outline,
+                  size: 64,
+                  color: Colors.grey[400],
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Erro ao carregar conversas',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Text(
+                    'Verifique se os índices do Firestore estão configurados corretamente.',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[500],
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {});
+                  },
+                  child: const Text('Tentar novamente'),
+                ),
+              ],
+            ),
+          );
         }
 
         final chatList = snapshot.data ?? [];
 
         return Column(
-      children: [
-        // Header
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              const Text(
-                'Mensagens',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-              ),
-              const Spacer(),
-              IconButton(
-                icon: const Icon(Icons.refresh),
-                onPressed: _loadChats,
-                tooltip: 'Atualizar',
-              ),
-            ],
-          ),
-        ),
-
-        // Lista de conversas
-        Expanded(
-          child: chatList.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.chat_bubble_outline,
-                        size: 80,
-                        color: Colors.grey[400],
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Nenhuma conversa ainda',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Inicie uma conversa através de uma carona!',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[500],
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
                   ),
-                )
-              : RefreshIndicator(
-                  onRefresh: () async {
-                    await _loadChats();
-                    setState(() {});
-                  },
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: chatList.length,
-                    itemBuilder: (context, index) {
-                      final chat = chatList[index];
-                      return _buildChatItem(chat);
+                ],
+              ),
+              child: Row(
+                children: [
+                  const Text(
+                    'Mensagens',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.refresh),
+                    onPressed: () {
+                      _loadChats();
+                      setState(() {});
                     },
+                    tooltip: 'Atualizar',
                   ),
-                ),
-        ),
-      ],
-    );
+                ],
+              ),
+            ),
+
+            // Lista de conversas
+            Expanded(
+              child: chatList.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.chat_bubble_outline,
+                            size: 80,
+                            color: Colors.grey[400],
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Nenhuma conversa ainda',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Inicie uma conversa através de uma carona!',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[500],
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    )
+                  : RefreshIndicator(
+                      onRefresh: () async {
+                        await _loadChats();
+                        setState(() {});
+                      },
+                      child: ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: chatList.length,
+                        itemBuilder: (context, index) {
+                          final chat = chatList[index];
+                          return _buildChatItemWithStream(chat, user.uid);
+                        },
+                      ),
+                    ),
+            ),
+          ],
+        );
       },
     );
   }
@@ -752,7 +845,16 @@ class _HomeScreenState extends State<HomeScreen> {
       // Adiciona conversas como motorista (caronas com passageiros aceitos)
       for (final ride in _myRides) {
         try {
-          final requests = await _rideRequestService.getRequestsByRide(ride.id);
+          // Usa timeout para evitar travamento quando há erro de índice
+          final requests = await _rideRequestService
+              .getRequestsByRide(ride.id)
+              .timeout(const Duration(seconds: 3), onTimeout: () {
+            if (kDebugMode) {
+              print('⚠ Timeout ao buscar solicitações da carona ${ride.id}');
+            }
+            return <RideRequest>[];
+          });
+          
           final accepted = requests.where((r) => r.isAccepted).toList();
           
           for (final request in accepted) {
@@ -768,7 +870,12 @@ class _HomeScreenState extends State<HomeScreen> {
           }
         } catch (e) {
           if (kDebugMode) {
-            print('⚠ Erro ao carregar solicitações da carona ${ride.id}: $e');
+            final errorMsg = e.toString();
+            if (errorMsg.contains('index')) {
+              print('⚠ Índice do Firestore faltando para carona ${ride.id}. Crie o índice necessário.');
+            } else {
+              print('⚠ Erro ao carregar solicitações da carona ${ride.id}: $e');
+            }
           }
           // Continua sem quebrar, apenas não mostra esta conversa
         }
@@ -782,68 +889,228 @@ class _HomeScreenState extends State<HomeScreen> {
     return chatList;
   }
 
-  /// Constrói item de conversa na lista
-  Widget _buildChatItem(_ChatListItem chat) {
-    final timeStr = DateFormat('dd/MM/yyyy').format(chat.ride.dateTime);
-    
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: ListTile(
-        leading: CircleAvatar(
-          radius: 28,
-          backgroundImage: chat.otherUserPhotoURL != null
-              ? NetworkImage(chat.otherUserPhotoURL!)
-              : null,
-          child: chat.otherUserPhotoURL == null
-              ? const Icon(Icons.person)
-              : null,
-        ),
-        title: Text(
-          chat.otherUserName,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 4),
-            Text(
-              '${chat.ride.origin.address?.split(',').first ?? "Origem"} → ${chat.ride.destination.address?.split(',').first ?? "Destino"}',
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.grey[600],
+  /// Stream de lista de conversas atualizada em tempo real
+  Stream<List<_ChatListItemWithStream>> _watchChatList(String userId) async* {
+    // Carrega lista inicial de conversas com timeout
+    List<_ChatListItem> initialList = [];
+    try {
+      initialList = await _loadChatList(userId)
+          .timeout(const Duration(seconds: 5), onTimeout: () {
+        if (kDebugMode) {
+          print('⚠ Timeout ao carregar lista inicial de conversas');
+        }
+        return <_ChatListItem>[];
+      });
+    } catch (e) {
+      if (kDebugMode) {
+        print('✗ Erro ao carregar lista inicial de conversas: $e');
+      }
+      // Emite lista vazia em caso de erro
+      initialList = [];
+    }
+
+    // Converte para lista com streams
+    List<_ChatListItemWithStream> chatListWithStreams = initialList.map((chat) {
+      return _ChatListItemWithStream(
+        ride: chat.ride,
+        isDriver: chat.isDriver,
+        otherUserName: chat.otherUserName,
+        otherUserPhotoURL: chat.otherUserPhotoURL,
+        otherUserId: chat.otherUserId,
+      );
+    }).toList();
+
+    // Emite lista inicial
+    yield chatListWithStreams;
+
+    // Observa mudanças nas caronas e solicitações
+    // Quando há mudanças, recarrega a lista
+    try {
+      final ridesStream = _ridesService.watchRidesByDriver(userId);
+      await for (final rides in ridesStream.timeout(const Duration(seconds: 30))) {
+        if (!mounted) break;
+        
+        try {
+          setState(() {
+            _myRides = rides;
+          });
+          
+          // Recarrega lista de conversas com timeout
+          final updatedList = await _loadChatList(userId)
+              .timeout(const Duration(seconds: 5), onTimeout: () {
+            if (kDebugMode) {
+              print('⚠ Timeout ao atualizar lista de conversas');
+            }
+            return <_ChatListItem>[];
+          });
+          
+          chatListWithStreams = updatedList.map((chat) {
+            return _ChatListItemWithStream(
+              ride: chat.ride,
+              isDriver: chat.isDriver,
+              otherUserName: chat.otherUserName,
+              otherUserPhotoURL: chat.otherUserPhotoURL,
+              otherUserId: chat.otherUserId,
+            );
+          }).toList();
+          
+          yield chatListWithStreams;
+        } catch (e) {
+          if (kDebugMode) {
+            print('✗ Erro ao atualizar lista de conversas: $e');
+          }
+          // Emite lista vazia em caso de erro
+          yield [];
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('✗ Erro no stream de caronas: $e');
+      }
+      // Emite lista vazia em caso de erro no stream
+      yield [];
+    }
+  }
+
+  /// Constrói item de conversa com stream em tempo real
+  Widget _buildChatItemWithStream(_ChatListItemWithStream chat, String userId) {
+    return StreamBuilder<ChatMessage?>(
+      stream: _chatService.watchLastMessage(chat.ride.id),
+      builder: (context, lastMessageSnapshot) {
+        final lastMessage = lastMessageSnapshot.data;
+        
+        return StreamBuilder<int>(
+          stream: _chatService.watchUnreadCount(chat.ride.id, userId),
+          builder: (context, unreadSnapshot) {
+            final unreadCount = unreadSnapshot.data ?? 0;
+            
+            // Atualiza contador total de não lidas (será atualizado pela função _updateUnreadCount)
+            
+            final lastMessageText = lastMessage?.message ?? 'Nenhuma mensagem ainda';
+            final lastMessageTime = lastMessage?.timestamp ?? chat.ride.dateTime;
+            
+            String timeStr;
+            final now = DateTime.now();
+            final today = DateTime(now.year, now.month, now.day);
+            final messageDate = DateTime(lastMessageTime.year, lastMessageTime.month, lastMessageTime.day);
+            
+            if (messageDate == today) {
+              timeStr = DateFormat('HH:mm').format(lastMessageTime);
+            } else if (messageDate == today.subtract(const Duration(days: 1))) {
+              timeStr = 'Ontem ${DateFormat('HH:mm').format(lastMessageTime)}';
+            } else {
+              timeStr = DateFormat('dd/MM HH:mm').format(lastMessageTime);
+            }
+            
+            return Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              timeStr,
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[500],
+              elevation: unreadCount > 0 ? 2 : 0,
+              child: ListTile(
+                leading: CircleAvatar(
+                  radius: 28,
+                  backgroundImage: chat.otherUserPhotoURL != null
+                      ? NetworkImage(chat.otherUserPhotoURL!)
+                      : null,
+                  child: chat.otherUserPhotoURL == null
+                      ? const Icon(Icons.person)
+                      : null,
+                ),
+                title: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        chat.otherUserName,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: unreadCount > 0 ? FontWeight.bold : FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (unreadCount > 0)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF2196F3),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          unreadCount > 99 ? '99+' : unreadCount.toString(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 4),
+                    Text(
+                      '${chat.ride.origin.address?.split(',').first ?? "Origem"} → ${chat.ride.destination.address?.split(',').first ?? "Destino"}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey[600],
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            lastMessageText,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: unreadCount > 0 ? Colors.black87 : Colors.grey[600],
+                              fontWeight: unreadCount > 0 ? FontWeight.w500 : FontWeight.normal,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          timeStr,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[500],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+                onTap: () async {
+                  // Marca mensagens como lidas ao abrir o chat
+                  await _chatService.markAsRead(chat.ride.id, userId);
+                  
+                  Navigator.pushNamed(
+                    context,
+                    '/chat',
+                    arguments: {
+                      'ride': chat.ride,
+                      'isDriver': chat.isDriver,
+                      'otherUserName': chat.otherUserName,
+                      'otherUserPhotoURL': chat.otherUserPhotoURL,
+                      'otherUserId': chat.otherUserId,
+                    },
+                  );
+                },
               ),
-            ),
-          ],
-        ),
-        trailing: const Icon(Icons.chevron_right, color: Colors.grey),
-        onTap: () {
-          Navigator.pushNamed(
-            context,
-            '/chat',
-            arguments: {
-              'ride': chat.ride,
-              'isDriver': chat.isDriver,
-              'otherUserName': chat.otherUserName,
-              'otherUserPhotoURL': chat.otherUserPhotoURL,
-              'otherUserId': chat.otherUserId,
-            },
-          );
-        },
-      ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -1140,6 +1407,59 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
   }
+
+  /// Atualiza contador total de mensagens não lidas
+  Future<void> _updateUnreadCount() async {
+    final authProvider = Provider.of<app_auth.AuthProvider>(context, listen: false);
+    final user = authProvider.user;
+    
+    if (user == null || !mounted) return;
+    
+    try {
+      // Carrega lista de conversas
+      final chatList = await _loadChatList(user.uid);
+      int total = 0;
+      
+      // Para cada conversa, conta mensagens não lidas
+      for (final chat in chatList) {
+        try {
+          final lastRead = await _chatService.getLastReadTimestamp(chat.ride.id, user.uid);
+          final unreadStream = _chatService.watchUnreadCount(chat.ride.id, user.uid, lastReadTimestamp: lastRead);
+          
+          // Pega o primeiro valor do stream com timeout de 2 segundos
+          int unreadCount = 0;
+          try {
+            unreadCount = await unreadStream
+                .timeout(const Duration(seconds: 2))
+                .first;
+          } catch (timeoutError) {
+            // Se timeout, assume 0 mensagens não lidas
+            if (kDebugMode) {
+              print('⚠ Timeout ao contar não lidas para ${chat.ride.id}');
+            }
+            unreadCount = 0;
+          }
+          
+          total += unreadCount;
+        } catch (e) {
+          if (kDebugMode) {
+            print('⚠ Erro ao contar não lidas para ${chat.ride.id}: $e');
+          }
+          // Continua para próxima conversa (assume 0 não lidas)
+        }
+      }
+      
+      if (mounted) {
+        setState(() {
+          _totalUnreadMessages = total;
+        });
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('✗ Erro ao atualizar contador de não lidas: $e');
+      }
+    }
+  }
 }
 
 /// Modelo para item de conversa na lista
@@ -1158,4 +1478,22 @@ class _ChatListItem {
     required this.otherUserId,
   });
 }
+
+/// Modelo para item de conversa com suporte a streams em tempo real
+class _ChatListItemWithStream {
+  final Ride ride;
+  final bool isDriver;
+  final String otherUserName;
+  final String? otherUserPhotoURL;
+  final String otherUserId;
+
+  _ChatListItemWithStream({
+    required this.ride,
+    required this.isDriver,
+    required this.otherUserName,
+    this.otherUserPhotoURL,
+    required this.otherUserId,
+  });
+}
+
 

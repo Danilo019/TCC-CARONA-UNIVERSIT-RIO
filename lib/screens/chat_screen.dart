@@ -45,7 +45,19 @@ class _ChatScreenState extends State<ChatScreen> {
     // Scroll automático quando novas mensagens chegarem
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToBottom();
+      // Marca mensagens como lidas ao abrir o chat
+      _markMessagesAsRead();
     });
+  }
+
+  /// Marca mensagens como lidas para o usuário atual
+  Future<void> _markMessagesAsRead() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final user = authProvider.user;
+    
+    if (user != null) {
+      await _chatService.markAsRead(widget.ride.id, user.uid);
+    }
   }
 
   @override

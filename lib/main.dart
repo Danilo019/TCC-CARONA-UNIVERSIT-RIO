@@ -12,10 +12,13 @@ import 'screens/verify_token_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/offer_ride_screen.dart';
 import 'screens/search_ride_screen.dart';
+import 'screens/motorist_screen.dart';
+import 'screens/passenger_screen.dart';
 import 'screens/vehicle_register_screen.dart';
 import 'screens/ride_manager_screen.dart';
 import 'screens/chat_screen.dart';
 import 'screens/forgot_password_screen.dart';
+import 'screens/avaliacoes_screen.dart';
 import 'screens/reset_password_screen.dart';
 import 'screens/edit_profile_screen.dart';
 import 'models/vehicle.dart';
@@ -109,11 +112,14 @@ class CaronaUniApp extends StatelessWidget {
           '/profile': (context) => const ProfileScreen(),
           '/offer-ride': (context) => const OfferRideScreen(),
           '/search-ride': (context) => const SearchRideScreen(),
+          '/motorist': (context) => const MotoristScreen(),
+          '/passenger': (context) => const PassengerScreen(),
           '/vehicle-register': (context) {
             final vehicle = ModalRoute.of(context)?.settings.arguments as Vehicle?;
             return VehicleRegisterScreen(existingVehicle: vehicle);
           },
           '/ride-manager': (context) => const RideManagerScreen(),
+          '/avaliacoes': (context) => const AvaliacoesScreen(),
           '/chat': (context) {
             final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
             if (args == null) {

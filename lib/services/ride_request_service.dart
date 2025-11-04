@@ -50,22 +50,37 @@ class RideRequestService {
 
   /// Stream de solicitações de uma carona
   Stream<List<RideRequest>> watchRequestsByRide(String rideId) {
-    return _requestsCollection
-        .where('rideId', isEqualTo: rideId)
-        .orderBy('createdAt', descending: false)
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs
-          .map((doc) {
-            try {
-              return RideRequest.fromFirestore(doc);
-            } catch (e) {
-              return null;
-            }
-          })
-          .whereType<RideRequest>()
-          .toList();
-    });
+    try {
+      return _requestsCollection
+          .where('rideId', isEqualTo: rideId)
+          .orderBy('createdAt', descending: false)
+          .snapshots()
+          .map((snapshot) {
+        return snapshot.docs
+            .map((doc) {
+              try {
+                return RideRequest.fromFirestore(doc);
+              } catch (e) {
+                return null;
+              }
+            })
+            .whereType<RideRequest>()
+            .toList();
+      }).handleError((error) {
+        if (kDebugMode) {
+          print('✗ Erro no stream de solicitações: $error');
+        }
+      }, test: (error) {
+        // Captura erros de índice faltando ou outros erros do Firestore
+        return true;
+      });
+    } catch (e) {
+      if (kDebugMode) {
+        print('✗ Erro ao criar stream de solicitações: $e');
+      }
+      // Retorna stream vazio em caso de erro
+      return Stream.value(<RideRequest>[]);
+    }
   }
 
   /// Busca todas as solicitações de um passageiro

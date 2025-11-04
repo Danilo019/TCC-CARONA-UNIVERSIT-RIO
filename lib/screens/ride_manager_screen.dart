@@ -5,9 +5,11 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../models/ride.dart';
 import '../models/ride_request.dart';
-import '../models/location.dart';
+
 import '../services/rides_service.dart';
 import '../services/ride_request_service.dart';
+import '../services/avaliacao_service.dart';
+import '../widgets/avaliacao_dialog.dart';
 
 /// Tela de gerenciamento de caronas do motorista
 class RideManagerScreen extends StatefulWidget {
@@ -23,8 +25,10 @@ class _RideManagerScreenState extends State<RideManagerScreen> {
 
   List<Ride> _myRides = [];
   final Map<String, List<RideRequest>> _requestsByRide = {};
+  final Map<String, bool> _avaliacaoVerificada = {}; // Cache para verificar se já avaliou
   bool _isLoading = true;
   int _selectedFilter = 0; // 0: Todas, 1: Ativas, 2: Concluídas, 3: Canceladas
+  final AvaliacaoService _avaliacaoService = AvaliacaoService();
 
   @override
   void initState() {
@@ -71,6 +75,12 @@ class _RideManagerScreenState extends State<RideManagerScreen> {
           _isLoading = false;
         });
         _loadRequestsForRides(myRides);
+        // Verificar avaliações após um delay para garantir que as requests foram carregadas
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            _verificarAvaliacoesExistentes();
+          }
+        });
       }
     } catch (e) {
       if (kDebugMode) {
@@ -92,6 +102,8 @@ class _RideManagerScreenState extends State<RideManagerScreen> {
           setState(() {
             _requestsByRide[ride.id] = requests;
           });
+          // Verifica avaliações após carregar as requests
+          _verificarAvaliacoesExistentes();
         }
       });
     }
@@ -467,7 +479,10 @@ class _RideManagerScreenState extends State<RideManagerScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  ...acceptedRequests.map((request) => _buildPassengerCard(request)),
+                  ...acceptedRequests.map((request) => _buildPassengerCard(
+                    request,
+                    ride: ride,
+                  )),
                   const SizedBox(height: 16),
                 ],
 
@@ -569,22 +584,14 @@ class _RideManagerScreenState extends State<RideManagerScreen> {
   }
 
   /// Card de passageiro confirmado
-  Widget _buildPassengerCard(RideRequest request) {
-    // Encontra a carona correspondente
-    final ride = _myRides.firstWhere(
-      (r) => r.id == request.rideId,
-      orElse: () => Ride(
-        id: '',
-        driverId: '',
-        driverName: '',
-        origin: Location(latitude: 0, longitude: 0, timestamp: DateTime.now()),
-        destination: Location(latitude: 0, longitude: 0, timestamp: DateTime.now()),
-        dateTime: DateTime.now(),
-        maxSeats: 1,
-        availableSeats: 0,
-        createdAt: DateTime.now(),
-      ),
-    );
+  Widget _buildPassengerCard(RideRequest request, {required Ride ride}) {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final currentUserId = authProvider.user?.uid ?? '';
+    final isCompleted = ride.status == 'completed';
+    
+    // Chave para verificar avaliação
+    final avaliacaoKey = '${ride.id}_${currentUserId}_${request.passengerId}';
+    final jaAvaliado = _avaliacaoVerificada[avaliacaoKey] ?? false;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -599,9 +606,34 @@ class _RideManagerScreenState extends State<RideManagerScreen> {
               : null,
         ),
         title: Text(request.passengerName),
+        subtitle: isCompleted && !jaAvaliado
+            ? const Text(
+                'Avalie este passageiro',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.orange,
+                  fontStyle: FontStyle.italic,
+                ),
+              )
+            : null,
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (isCompleted && !jaAvaliado)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: AvaliarButton(
+                  caronaId: ride.id,
+                  avaliadorUsuarioId: currentUserId,
+                  avaliadoUsuarioId: request.passengerId,
+                  avaliadoNome: request.passengerName,
+                  onAvaliacaoEnviada: () {
+                    setState(() {
+                      _avaliacaoVerificada[avaliacaoKey] = true;
+                    });
+                  },
+                ),
+              ),
             IconButton(
               icon: const Icon(Icons.chat, color: Color(0xFF2196F3)),
               onPressed: ride.id.isNotEmpty ? () => _openChat(ride, request) : null,
@@ -612,6 +644,39 @@ class _RideManagerScreenState extends State<RideManagerScreen> {
         ),
       ),
     );
+  }
+
+  /// Verifica se já avaliou um passageiro (carrega do cache ou do Firestore)
+  Future<void> _verificarAvaliacoesExistentes() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final currentUserId = authProvider.user?.uid ?? '';
+    
+    if (currentUserId.isEmpty) return;
+
+    for (final ride in _myRides) {
+      if (ride.status != 'completed') continue;
+      
+      final requests = _requestsByRide[ride.id] ?? [];
+      final acceptedRequests = requests.where((r) => r.isAccepted).toList();
+
+      for (final request in acceptedRequests) {
+        final avaliacaoKey = '${ride.id}_${currentUserId}_${request.passengerId}';
+        
+        if (!_avaliacaoVerificada.containsKey(avaliacaoKey)) {
+          final jaAvaliado = await _avaliacaoService.verificarAvaliacaoExistente(
+            caronaId: ride.id,
+            avaliadorUsuarioId: currentUserId,
+            avaliadoUsuarioId: request.passengerId,
+          );
+          
+          _avaliacaoVerificada[avaliacaoKey] = jaAvaliado;
+        }
+      }
+    }
+
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   /// Abre a tela de chat com um passageiro
