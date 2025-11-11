@@ -6,6 +6,102 @@ if (!admin.apps.length) {
   admin.initializeApp();
 }
 
+const TOKEN_ATTEMPTS = 10;
+const TOKEN_VALIDITY_MINUTES = 30;
+
+const generateSixDigitToken = () => {
+  const token = Math.floor(100000 + Math.random() * 900000);
+  return token.toString();
+};
+
+/**
+ * Emite um token de ativação ou reset de senha.
+ *
+ * Recebe: { email, purpose? }
+ * Retorna: { token, email, createdAt, expiresAt, isUsed, purpose }
+ */
+exports.issueActivationToken = functions.https.onCall(async (data, context) => {
+  try {
+    const { email, purpose = 'activation' } = data;
+
+    if (!email || typeof email !== 'string') {
+      throw new functions.https.HttpsError(
+        'invalid-argument',
+        'Email é obrigatório.'
+      );
+    }
+
+    if (!email.endsWith('@cs.udf.edu.br')) {
+      throw new functions.https.HttpsError(
+        'invalid-argument',
+        'Apenas emails @cs.udf.edu.br são permitidos.'
+      );
+    }
+
+    if (purpose !== 'activation' && purpose !== 'password_reset') {
+      throw new functions.https.HttpsError(
+        'invalid-argument',
+        'Purpose inválido. Use "activation" ou "password_reset".'
+      );
+    }
+
+    const tokensCollection = admin.firestore().collection('activationTokens');
+    const createdAt = admin.firestore.Timestamp.now();
+    const expiresAt = admin.firestore.Timestamp.fromMillis(
+      createdAt.toMillis() + TOKEN_VALIDITY_MINUTES * 60 * 1000
+    );
+
+    for (let attempt = 0; attempt < TOKEN_ATTEMPTS; attempt += 1) {
+      const token = generateSixDigitToken();
+      const docRef = tokensCollection.doc(token);
+      const snapshot = await docRef.get();
+
+      if (snapshot.exists) {
+        continue;
+      }
+
+      await docRef.set({
+        token,
+        email,
+        purpose,
+        createdAt,
+        expiresAt,
+        isUsed: false,
+      });
+
+      functions.logger.info('Token emitido com sucesso', {
+        email,
+        purpose,
+        expiresAt: expiresAt.toMillis(),
+      });
+
+      return {
+        token,
+        email,
+        purpose,
+        isUsed: false,
+        createdAt: createdAt.toMillis(),
+        expiresAt: expiresAt.toMillis(),
+      };
+    }
+
+    throw new functions.https.HttpsError(
+      'resource-exhausted',
+      'Não foi possível gerar um token único. Tente novamente.'
+    );
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) {
+      throw error;
+    }
+
+    functions.logger.error('Erro ao emitir token:', error);
+    throw new functions.https.HttpsError(
+      'internal',
+      'Erro ao gerar token. Tente novamente mais tarde.'
+    );
+  }
+});
+
 /**
  * Cloud Function para redefinir senha usando token customizado
  * 
@@ -130,4 +226,153 @@ exports.resetPassword = functions.https.onCall(async (data, context) => {
     );
   }
 });
+
+/**
+ * Cloud Function para validar tokens de ativação/reset.
+ *
+ * Recebe: { email, token, markAsUsed? }
+ * Retorna: { isValid: boolean, expiresAt?: number }
+ *
+ * Opcionalmente marca o token como usado quando markAsUsed = true.
+ */
+exports.validateActivationToken = functions.https.onCall(async (data, context) => {
+  try {
+    const { email, token, markAsUsed = false } = data;
+
+    if (!email || !token) {
+      throw new functions.https.HttpsError(
+        'invalid-argument',
+        'Email e token são obrigatórios'
+      );
+    }
+
+    if (typeof email !== 'string' || typeof token !== 'string') {
+      throw new functions.https.HttpsError(
+        'invalid-argument',
+        'Email e token devem ser strings'
+      );
+    }
+
+    if (!email.endsWith('@cs.udf.edu.br')) {
+      throw new functions.https.HttpsError(
+        'invalid-argument',
+        'Apenas emails @cs.udf.edu.br são permitidos'
+      );
+    }
+
+    // Busca token no Firestore
+    const tokenDoc = await admin.firestore()
+      .collection('activationTokens')
+      .doc(token)
+      .get();
+
+    if (!tokenDoc.exists) {
+      throw new functions.https.HttpsError(
+        'not-found',
+        'Token inválido ou não encontrado'
+      );
+    }
+
+    const tokenData = tokenDoc.data();
+
+    if (tokenData.email !== email) {
+      throw new functions.https.HttpsError(
+        'permission-denied',
+        'Token não corresponde ao email informado'
+      );
+    }
+
+    if (tokenData.isUsed === true) {
+      throw new functions.https.HttpsError(
+        'permission-denied',
+        'Token já foi usado'
+      );
+    }
+
+    const expiresAt = tokenData.expiresAt.toMillis();
+    if (Date.now() > expiresAt) {
+      throw new functions.https.HttpsError(
+        'deadline-exceeded',
+        'Token expirado. Solicite um novo código.'
+      );
+    }
+
+    if (markAsUsed === true) {
+      await tokenDoc.ref.update({
+        isUsed: true,
+        usedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+
+    functions.logger.info('Token validado com sucesso', {
+      email,
+      token,
+      markAsUsed,
+    });
+
+    return {
+      isValid: true,
+      expiresAt,
+    };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) {
+      throw error;
+    }
+
+    functions.logger.error('Erro ao validar token:', error);
+    throw new functions.https.HttpsError(
+      'internal',
+      'Erro ao validar token. Tente novamente mais tarde.'
+    );
+  }
+});
+
+/**
+ * Dispara notificação quando uma nova carona é criada.
+ */
+exports.onRideCreated = functions.firestore
+  .document('rides/{rideId}')
+  .onCreate(async (snap, context) => {
+    try {
+      const ride = snap.data();
+      if (!ride) {
+        return;
+      }
+
+      if (ride.status !== 'active' || ride.availableSeats <= 0) {
+        return;
+      }
+
+      const origin = ride.origin?.address || 'Origem não informada';
+      const destination = ride.destination?.address || 'Destino não informado';
+      const dateTime = ride.dateTime?.toDate
+        ? ride.dateTime.toDate()
+        : ride.dateTime
+        ? new Date(ride.dateTime)
+        : null;
+
+      const formattedTime = dateTime
+        ? `${dateTime.getHours().toString().padStart(2, '0')}:${dateTime
+            .getMinutes()
+            .toString()
+            .padStart(2, '0')}`
+        : '';
+
+      await admin.messaging().send({
+        topic: 'new_rides',
+        notification: {
+          title: 'Nova carona disponível',
+          body: formattedTime
+            ? `${origin} → ${destination} às ${formattedTime}`
+            : `${origin} → ${destination}`,
+        },
+        data: {
+          rideId: snap.id,
+          driverId: ride.driverId || '',
+        },
+      });
+    } catch (error) {
+      functions.logger.error('Erro ao enviar notificação de nova carona', error);
+    }
+  });
 

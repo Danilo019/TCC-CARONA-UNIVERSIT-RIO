@@ -18,9 +18,7 @@ class ProfileScreen extends StatelessWidget {
 
             // Mostra loading enquanto inicializa
             if (authProvider.status == app_auth.AuthStatus.loading) {
-              return const Center(
-                child: CircularProgressIndicator(),
-              );
+              return const Center(child: CircularProgressIndicator());
             }
 
             if (user == null) {
@@ -28,18 +26,11 @@ class ProfileScreen extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(
-                      Icons.person_off,
-                      size: 64,
-                      color: Colors.grey,
-                    ),
+                    const Icon(Icons.person_off, size: 64, color: Colors.grey),
                     const SizedBox(height: 16),
                     const Text(
                       'Usuário não autenticado',
-                      style: TextStyle(
-                        fontSize: 18,
-                        color: Colors.grey,
-                      ),
+                      style: TextStyle(fontSize: 18, color: Colors.grey),
                     ),
                     const SizedBox(height: 24),
                     ElevatedButton(
@@ -71,6 +62,11 @@ class ProfileScreen extends StatelessWidget {
 
                   const SizedBox(height: 30),
 
+                  // Direito ao Esquecimento
+                  _buildAccountDeletionSection(context, authProvider),
+
+                  const SizedBox(height: 30),
+
                   // Botão de logout
                   _buildLogoutButton(context, authProvider),
                 ],
@@ -91,10 +87,7 @@ class ProfileScreen extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            Colors.blue.shade700,
-            Colors.blue.shade400,
-          ],
+          colors: [Colors.blue.shade700, Colors.blue.shade400],
         ),
       ),
       child: Column(
@@ -184,18 +177,11 @@ class ProfileScreen extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            Colors.blue.shade300,
-            Colors.blue.shade600,
-          ],
+          colors: [Colors.blue.shade300, Colors.blue.shade600],
         ),
         shape: BoxShape.circle,
       ),
-      child: const Icon(
-        Icons.person,
-        size: 60,
-        color: Colors.white,
-      ),
+      child: const Icon(Icons.person, size: 60, color: Colors.white),
     );
   }
 
@@ -240,10 +226,7 @@ class ProfileScreen extends StatelessWidget {
                   Expanded(
                     child: Text(
                       'Seu email ainda não foi verificado. Verifique sua caixa de entrada e clique no link enviado.',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.orange[900],
-                      ),
+                      style: TextStyle(fontSize: 13, color: Colors.orange[900]),
                     ),
                   ),
                 ],
@@ -276,7 +259,7 @@ class ProfileScreen extends StatelessWidget {
   Widget _buildVerificationTile(BuildContext context, dynamic user) {
     final isVerified = user.emailVerified;
     final authService = AuthService();
-    
+
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Row(
@@ -315,7 +298,9 @@ class ProfileScreen extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
-                        color: isVerified ? Colors.green[700] : Colors.orange[700],
+                        color: isVerified
+                            ? Colors.green[700]
+                            : Colors.orange[700],
                       ),
                     ),
                     if (isVerified) ...[
@@ -336,13 +321,17 @@ class ProfileScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 ElevatedButton.icon(
-                  onPressed: () => _handleSendVerificationEmail(context, authService),
+                  onPressed: () =>
+                      _handleSendVerificationEmail(context, authService),
                   icon: const Icon(Icons.email_outlined, size: 18),
                   label: const Text('Enviar Verificação'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.orange[700],
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -362,14 +351,15 @@ class ProfileScreen extends StatelessWidget {
 
   /// Atualiza o status de verificação (útil após verificar email no navegador)
   Future<void> _handleRefreshVerificationStatus(BuildContext context) async {
-    final authProvider = Provider.of<app_auth.AuthProvider>(context, listen: false);
-    
+    final authProvider = Provider.of<app_auth.AuthProvider>(
+      context,
+      listen: false,
+    );
+
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const Center(
-        child: CircularProgressIndicator(),
-      ),
+      builder: (context) => const Center(child: CircularProgressIndicator()),
     );
 
     try {
@@ -386,9 +376,7 @@ class ProfileScreen extends StatelessWidget {
                 children: [
                   Icon(Icons.check_circle, color: Colors.white),
                   SizedBox(width: 12),
-                  Expanded(
-                    child: Text('Email verificado com sucesso!'),
-                  ),
+                  Expanded(child: Text('Email verificado com sucesso!')),
                 ],
               ),
               backgroundColor: Colors.green,
@@ -398,7 +386,9 @@ class ProfileScreen extends StatelessWidget {
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Email ainda não verificado. Verifique sua caixa de entrada.'),
+              content: Text(
+                'Email ainda não verificado. Verifique sua caixa de entrada.',
+              ),
               backgroundColor: Colors.orange,
               duration: Duration(seconds: 3),
             ),
@@ -427,21 +417,22 @@ class ProfileScreen extends StatelessWidget {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const Center(
-        child: CircularProgressIndicator(),
-      ),
+      builder: (context) => const Center(child: CircularProgressIndicator()),
     );
 
     try {
       await authService.sendEmailVerification();
-      
+
       // Recarrega o usuário no provider
-      final authProvider = Provider.of<app_auth.AuthProvider>(context, listen: false);
+      final authProvider = Provider.of<app_auth.AuthProvider>(
+        context,
+        listen: false,
+      );
       await authProvider.refreshUser();
 
       if (context.mounted) {
         Navigator.pop(context); // Fecha loading
-        
+
         // Mostra sucesso
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -464,7 +455,7 @@ class ProfileScreen extends StatelessWidget {
     } catch (e) {
       if (context.mounted) {
         Navigator.pop(context); // Fecha loading
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Erro: ${e.toString()}'),
@@ -494,11 +485,7 @@ class ProfileScreen extends StatelessWidget {
               color: Colors.blue.shade50,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(
-              icon,
-              color: Colors.blue.shade700,
-              size: 24,
-            ),
+            child: Icon(icon, color: Colors.blue.shade700, size: 24),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -559,7 +546,7 @@ class ProfileScreen extends StatelessWidget {
         children: [
           _buildActionTile(
             icon: Icons.directions_car,
-            label: 'Meu Veículo',
+            label: 'Meus Veículos',
             onTap: () {
               Navigator.of(context).pushNamed('/vehicle-register');
             },
@@ -569,10 +556,16 @@ class ProfileScreen extends StatelessWidget {
             icon: Icons.edit_outlined,
             label: 'Editar Perfil',
             onTap: () async {
-              final result = await Navigator.pushNamed(context, '/edit-profile');
+              final result = await Navigator.pushNamed(
+                context,
+                '/edit-profile',
+              );
               // Recarrega dados do usuário após editar perfil
               if (result == true) {
-                final authProvider = Provider.of<app_auth.AuthProvider>(context, listen: false);
+                final authProvider = Provider.of<app_auth.AuthProvider>(
+                  context,
+                  listen: false,
+                );
                 await authProvider.refreshUser();
               }
             },
@@ -588,26 +581,8 @@ class ProfileScreen extends StatelessWidget {
           _buildDivider(),
           _buildActionTile(
             icon: Icons.settings_outlined,
-            label: 'Configurações',
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Funcionalidade em breve'),
-                ),
-              );
-            },
-          ),
-          _buildDivider(),
-          _buildActionTile(
-            icon: Icons.help_outline,
-            label: 'Ajuda & Suporte',
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Funcionalidade em breve'),
-                ),
-              );
-            },
+            label: 'Configuração e privacidade',
+            onTap: () => _showSettingsPrivacySheet(context),
           ),
           _buildDivider(),
           _buildActionTile(
@@ -618,7 +593,18 @@ class ProfileScreen extends StatelessWidget {
                 context: context,
                 applicationName: 'Carona Universitária',
                 applicationVersion: '1.0.0',
-                applicationLegalese: 'Desenvolvido para a comunidade universitária',
+                applicationLegalese:
+                    'Desenvolvido para a comunidade universitária',
+              );
+            },
+          ),
+          _buildDivider(),
+          _buildActionTile(
+            icon: Icons.help_outline,
+            label: 'Ajuda',
+            onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Funcionalidade em breve')),
               );
             },
           ),
@@ -641,29 +627,175 @@ class ProfileScreen extends StatelessWidget {
           color: Colors.blue.shade50,
           borderRadius: BorderRadius.circular(10),
         ),
-        child: Icon(
-          icon,
-          color: Colors.blue.shade700,
-          size: 22,
-        ),
+        child: Icon(icon, color: Colors.blue.shade700, size: 22),
       ),
       title: Text(
         label,
-        style: const TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-        ),
+        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
       ),
-      trailing: Icon(
-        Icons.chevron_right,
-        color: Colors.grey[400],
-      ),
+      trailing: Icon(Icons.chevron_right, color: Colors.grey[400]),
       onTap: onTap,
     );
   }
 
+  void _showSettingsPrivacySheet(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(top: 8, bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.privacy_tip_outlined),
+                  title: const Text('Central de privacidade (Meus Dados)'),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    Navigator.of(context).pushNamed('/user-data');
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.settings),
+                  title: const Text('Configurações'),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    Navigator.of(context).pushNamed('/settings');
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.article_outlined),
+                  title: const Text('Política de Privacidade'),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    Navigator.of(context).pushNamed('/privacy-policy');
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.assignment_outlined),
+                  title: const Text('Termos de condições'),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    Navigator.of(context).pushNamed('/terms-of-service');
+                  },
+                ),
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Constrói seção de exclusão de conta (Direito ao Esquecimento)
+  Widget _buildAccountDeletionSection(
+    BuildContext context,
+    app_auth.AuthProvider authProvider,
+  ) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.red.shade50,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.red.shade100),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.red.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: Colors.red.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.delete_forever_outlined,
+                  color: Colors.red.shade700,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Direito ao Esquecimento',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.red.shade700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Excluir definitivamente sua conta, dados pessoais, histórico de caronas e arquivos armazenados.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.red.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: () => _handleDeleteAccount(context, authProvider),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade600,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            icon: const Icon(Icons.shield_outlined),
+            label: const Text(
+              'Excluir Conta',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Esta ação é irreversível.',
+            style: TextStyle(fontSize: 12, color: Colors.red.shade700),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Constrói botão de logout
-  Widget _buildLogoutButton(BuildContext context, app_auth.AuthProvider authProvider) {
+  Widget _buildLogoutButton(
+    BuildContext context,
+    app_auth.AuthProvider authProvider,
+  ) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
       child: ElevatedButton(
@@ -680,9 +812,7 @@ class ProfileScreen extends StatelessWidget {
                 ),
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(true),
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.red,
-                  ),
+                  style: TextButton.styleFrom(foregroundColor: Colors.red),
                   child: const Text('Sair'),
                 ),
               ],
@@ -692,10 +822,9 @@ class ProfileScreen extends StatelessWidget {
           if (confirmed == true) {
             await authProvider.signOut();
             if (context.mounted) {
-              Navigator.of(context).pushNamedAndRemoveUntil(
-                '/login',
-                (route) => false,
-              );
+              Navigator.of(
+                context,
+              ).pushNamedAndRemoveUntil('/login', (route) => false);
             }
           }
         },
@@ -715,15 +844,112 @@ class ProfileScreen extends StatelessWidget {
             SizedBox(width: 8),
             Text(
               'Sair da Conta',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
           ],
         ),
       ),
     );
+  }
+
+  /// Fluxo de exclusão de conta
+  Future<void> _handleDeleteAccount(
+    BuildContext context,
+    app_auth.AuthProvider authProvider,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Excluir conta?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: const [
+              Text(
+                'Esta ação removerá permanentemente:',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              SizedBox(height: 12),
+              Text('• Dados pessoais e perfil'),
+              Text('• Histórico de caronas e avaliações'),
+              Text('• Solicitações, veículos e consentimentos'),
+              Text('• Arquivos armazenados (documentos e fotos)'),
+              SizedBox(height: 12),
+              Text(
+                'Ao confirmar você aceita excluir sua conta definitivamente conforme a LGPD.',
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red.shade600),
+              child: const Text('Excluir'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
+
+    // Mostra loading durante a exclusão
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      await authProvider.deleteAccount();
+
+      if (!context.mounted) {
+        return;
+      }
+
+      Navigator.pop(context); // Fecha loading
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Conta excluída com sucesso.'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 3),
+        ),
+      );
+
+      Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+    } catch (e) {
+      if (!context.mounted) {
+        return;
+      }
+
+      Navigator.pop(context); // Fecha loading
+
+      final message = e.toString().replaceFirst('Exception: ', '');
+      final requiresRecentLogin = message.toLowerCase().contains(
+        'login novamente',
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            requiresRecentLogin
+                ? 'Faça login novamente e tente excluir a conta.'
+                : 'Erro ao excluir conta: $message',
+          ),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
   }
 
   /// Formata data para exibição
@@ -746,4 +972,3 @@ class ProfileScreen extends StatelessWidget {
     }
   }
 }
-

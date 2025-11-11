@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 /// Modelo para representar uma localização geográfica
 class Location {
   final double latitude;
@@ -32,6 +34,11 @@ class Location {
       'address': address,
       'timestamp': timestamp,
     };
+  }
+
+  /// Converte Location para GeoPoint do Firestore
+  GeoPoint toGeoPoint() {
+    return GeoPoint(latitude, longitude);
   }
 
   /// Cria uma cópia da localização com campos atualizados

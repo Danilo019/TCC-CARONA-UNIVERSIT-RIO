@@ -15,6 +15,7 @@ import '../services/chat_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
+import 'trip_history_screen.dart';
 
 /// Tela principal do aplicativo após o onboarding
 /// 
@@ -1116,35 +1117,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Constrói a tela de viagens (placeholder)
   Widget _buildTripsScreen() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.explore_outlined,
-            size: 80,
-            color: Colors.grey[400],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Viagens',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey[600],
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Esta funcionalidade estará disponível em breve!',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey,
-            ),
-          ),
-        ],
-      ),
-    );
+    return const TripHistoryScreen();
   }
 
   /// Exibe diálogo de "Em breve"

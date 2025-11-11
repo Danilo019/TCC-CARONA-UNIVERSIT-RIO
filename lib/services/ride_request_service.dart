@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import '../models/ride_request.dart';
 import '../services/rides_service.dart';
+import '../services/notification_service.dart';
 
 /// Serviço para gerenciar solicitações de carona
 class RideRequestService {
@@ -11,9 +12,11 @@ class RideRequestService {
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final RidesService _ridesService = RidesService();
+  final NotificationService _notificationService = NotificationService();
 
   /// Collection reference para solicitações
-  CollectionReference get _requestsCollection => _firestore.collection('ride_requests');
+  CollectionReference get _requestsCollection =>
+      _firestore.collection('ride_requests');
 
   // ===========================================================================
   // OPERAÇÕES DE LEITURA
@@ -56,29 +59,68 @@ class RideRequestService {
           .orderBy('createdAt', descending: false)
           .snapshots()
           .map((snapshot) {
-        return snapshot.docs
-            .map((doc) {
-              try {
-                return RideRequest.fromFirestore(doc);
-              } catch (e) {
-                return null;
+            return snapshot.docs
+                .map((doc) {
+                  try {
+                    return RideRequest.fromFirestore(doc);
+                  } catch (e) {
+                    return null;
+                  }
+                })
+                .whereType<RideRequest>()
+                .toList();
+          })
+          .handleError(
+            (error) {
+              if (kDebugMode) {
+                print('✗ Erro no stream de solicitações: $error');
               }
-            })
-            .whereType<RideRequest>()
-            .toList();
-      }).handleError((error) {
-        if (kDebugMode) {
-          print('✗ Erro no stream de solicitações: $error');
-        }
-      }, test: (error) {
-        // Captura erros de índice faltando ou outros erros do Firestore
-        return true;
-      });
+            },
+            test: (error) {
+              // Captura erros de índice faltando ou outros erros do Firestore
+              return true;
+            },
+          );
     } catch (e) {
       if (kDebugMode) {
         print('✗ Erro ao criar stream de solicitações: $e');
       }
       // Retorna stream vazio em caso de erro
+      return Stream.value(<RideRequest>[]);
+    }
+  }
+
+  /// Stream de solicitações de um passageiro
+  Stream<List<RideRequest>> watchRequestsByPassenger(String passengerId) {
+    try {
+      return _requestsCollection
+          .where('passengerId', isEqualTo: passengerId)
+          .orderBy('createdAt', descending: true)
+          .snapshots()
+          .map((snapshot) {
+            return snapshot.docs
+                .map((doc) {
+                  try {
+                    return RideRequest.fromFirestore(doc);
+                  } catch (e) {
+                    if (kDebugMode) {
+                      print('✗ Erro ao converter solicitação ${doc.id}: $e');
+                    }
+                    return null;
+                  }
+                })
+                .whereType<RideRequest>()
+                .toList();
+          })
+          .handleError((error) {
+            if (kDebugMode) {
+              print('✗ Erro no stream de solicitações por passageiro: $error');
+            }
+          }, test: (error) => true);
+    } catch (e) {
+      if (kDebugMode) {
+        print('✗ Erro ao criar stream de solicitações por passageiro: $e');
+      }
       return Stream.value(<RideRequest>[]);
     }
   }
@@ -113,7 +155,7 @@ class RideRequestService {
   Future<RideRequest?> getRequestById(String requestId) async {
     try {
       final doc = await _requestsCollection.doc(requestId).get();
-      
+
       if (!doc.exists) {
         return null;
       }
@@ -190,9 +232,24 @@ class RideRequestService {
         await _ridesService.reserveSeat(request.rideId);
       }
 
+      try {
+        if (ride != null) {
+          await _notificationService.refreshRemindersIfEnabled(ride.driverId);
+        }
+        await _notificationService.refreshRemindersIfEnabled(
+          request.passengerId,
+        );
+      } catch (error) {
+        if (kDebugMode) {
+          print(
+            '⚠ Não foi possível atualizar lembretes após aceitar solicitação: $error',
+          );
+        }
+      }
+
       // Rejeita outras solicitações pendentes da mesma carona
       // (opcional - pode permitir múltiplas aceitações)
-      
+
       if (kDebugMode) {
         print('✓ Solicitação aceita: $requestId');
       }

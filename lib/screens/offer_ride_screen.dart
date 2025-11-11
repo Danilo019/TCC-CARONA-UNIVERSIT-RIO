@@ -12,6 +12,7 @@ import '../services/google_maps_service.dart';
 import '../services/nominatim_service.dart';
 import '../components/map_widget.dart';
 import '../components/address_autocomplete.dart';
+import '../services/notification_service.dart';
 
 /// Tela para oferecer uma nova carona e gerenciar caronas existentes
 class OfferRideScreen extends StatefulWidget {
@@ -21,21 +22,23 @@ class OfferRideScreen extends StatefulWidget {
   State<OfferRideScreen> createState() => _OfferRideScreenState();
 }
 
-class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProviderStateMixin {
+class _OfferRideScreenState extends State<OfferRideScreen>
+    with SingleTickerProviderStateMixin {
   final RidesService _ridesService = RidesService();
   final RideRequestService _requestService = RideRequestService();
   final GoogleMapsService _googleMapsService = GoogleMapsService();
-  
+  final NotificationService _notificationService = NotificationService();
+
   late TabController _tabController;
-  
+
   // Estados das abas (removido - agora usa TabController)
-  
+
   // Estados do formulário de nova carona
   final _formKey = GlobalKey<FormState>();
   final _originController = TextEditingController();
   final _destinationController = TextEditingController();
   final _descriptionController = TextEditingController();
-  
+
   Location? _originLocation;
   Location? _destinationLocation;
   final List<Location> _pickupPoints = []; // Pontos de embarque
@@ -183,11 +186,11 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
       await _showMapPicker('Destino');
     }
   }
-  
+
   /// Mostra mapa interativo para selecionar localização
   Future<void> _showMapPicker(String title) async {
     Location? selectedLocation;
-    
+
     await showDialog(
       context: context,
       barrierDismissible: false,
@@ -247,7 +250,9 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF2196F3).withValues(alpha: 0.3),
+                              color: const Color(
+                                0xFF2196F3,
+                              ).withValues(alpha: 0.3),
                               blurRadius: 15,
                               offset: const Offset(0, 5),
                             ),
@@ -259,14 +264,19 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
                               : () async {
                                   // Faz reverse geocoding para obter endereço
                                   if (selectedLocation != null) {
-                                    final geocodeResult = await _googleMapsService
-                                        .reverseGeocode(selectedLocation!);
-                                    
+                                    final geocodeResult =
+                                        await _googleMapsService.reverseGeocode(
+                                          selectedLocation!,
+                                        );
+
                                     if (mounted) {
-                                      final finalLocation = geocodeResult?.location ?? selectedLocation!;
-                                      final address = geocodeResult?.formattedAddress ?? 
+                                      final finalLocation =
+                                          geocodeResult?.location ??
+                                          selectedLocation!;
+                                      final address =
+                                          geocodeResult?.formattedAddress ??
                                           '${finalLocation.latitude.toStringAsFixed(6)}, ${finalLocation.longitude.toStringAsFixed(6)}';
-                                      
+
                                       setState(() {
                                         if (title == 'Origem') {
                                           _originLocation = finalLocation;
@@ -276,7 +286,7 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
                                           _destinationController.text = address;
                                         }
                                       });
-                                      
+
                                       if (mounted) {
                                         Navigator.pop(context);
                                       }
@@ -409,8 +419,8 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
         dateTime: _selectedDateTime!,
         maxSeats: _maxSeats,
         availableSeats: _availableSeats,
-        description: _descriptionController.text.isNotEmpty 
-            ? _descriptionController.text 
+        description: _descriptionController.text.isNotEmpty
+            ? _descriptionController.text
             : null,
         status: 'active',
         createdAt: DateTime.now(),
@@ -419,16 +429,25 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
       final rideId = await _ridesService.createRide(ride);
 
       if (rideId != null && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Carona criada com sucesso!'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
+        try {
+          await _notificationService.refreshRemindersIfEnabled(user.uid);
+        } catch (error) {
+          if (kDebugMode) {
+            print('⚠ Falha ao atualizar lembretes após criar carona: $error');
+          }
+        }
 
-        // Volta para a tela anterior
-        Navigator.of(context).pop(true);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Carona criada com sucesso!'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+
+          Navigator.of(context).pop(true);
+        }
       } else {
         _showError('Erro ao criar carona');
       }
@@ -490,7 +509,7 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
                         setDialogState(() {});
                       },
                     ),
-                    
+
                     // Instruções no topo
                     Positioned(
                       top: 10,
@@ -511,7 +530,11 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
                         ),
                         child: Row(
                           children: [
-                            Icon(Icons.info_outline, color: Colors.blue[700], size: 20),
+                            Icon(
+                              Icons.info_outline,
+                              color: Colors.blue[700],
+                              size: 20,
+                            ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
@@ -528,7 +551,7 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
                         ),
                       ),
                     ),
-                    
+
                     // Marcador central (selecionado) - só aparece após seleção
                     if (selectedLocation != null)
                       Center(
@@ -542,10 +565,15 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   color: Colors.orange.withValues(alpha: 0.7),
-                                  border: Border.all(color: Colors.white, width: 3),
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 3,
+                                  ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.3),
+                                      color: Colors.black.withValues(
+                                        alpha: 0.3,
+                                      ),
                                       blurRadius: 10,
                                       spreadRadius: 2,
                                     ),
@@ -561,7 +589,7 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
                           ),
                         ),
                       ),
-                    
+
                     // Botão de confirmar na parte inferior
                     Positioned(
                       bottom: 20,
@@ -586,11 +614,16 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
                               ),
                               child: Row(
                                 children: [
-                                  Icon(Icons.location_on, color: Colors.orange[700], size: 20),
+                                  Icon(
+                                    Icons.location_on,
+                                    color: Colors.orange[700],
+                                    size: 20,
+                                  ),
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           'Lat: ${selectedLocation!.latitude.toStringAsFixed(6)}',
@@ -621,40 +654,63 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
                                             child: CircularProgressIndicator(),
                                           ),
                                         );
-                                        
-                                        final geocodeResult = await _googleMapsService
-                                            .reverseGeocode(selectedLocation!);
-                                        
+
+                                        final geocodeResult =
+                                            await _googleMapsService
+                                                .reverseGeocode(
+                                                  selectedLocation!,
+                                                );
+
                                         if (mounted) {
-                                          Navigator.pop(context); // Fecha loading
-                                          
-                                          final finalLocation = geocodeResult?.location ?? selectedLocation!;
-                                          final address = geocodeResult?.formattedAddress ?? 
+                                          Navigator.pop(
+                                            context,
+                                          ); // Fecha loading
+
+                                          final finalLocation =
+                                              geocodeResult?.location ??
+                                              selectedLocation!;
+                                          final address =
+                                              geocodeResult?.formattedAddress ??
                                               '${finalLocation.latitude.toStringAsFixed(6)}, ${finalLocation.longitude.toStringAsFixed(6)}';
-                                          
+
                                           setState(() {
-                                            _pickupPoints.add(finalLocation.copyWith(address: address));
-                                            _routePoints = null; // Limpa rota para recalcular
+                                            _pickupPoints.add(
+                                              finalLocation.copyWith(
+                                                address: address,
+                                              ),
+                                            );
+                                            _routePoints =
+                                                null; // Limpa rota para recalcular
                                           });
-                                          
-                                          Navigator.pop(context); // Fecha diálogo do mapa
-                                          
-                                          ScaffoldMessenger.of(context).showSnackBar(
+
+                                          Navigator.pop(
+                                            context,
+                                          ); // Fecha diálogo do mapa
+
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
                                             SnackBar(
-                                              content: Text('Ponto de embarque adicionado: $address'),
+                                              content: Text(
+                                                'Ponto de embarque adicionado: $address',
+                                              ),
                                               backgroundColor: Colors.green,
-                                              duration: const Duration(seconds: 2),
+                                              duration: const Duration(
+                                                seconds: 2,
+                                              ),
                                             ),
                                           );
                                         }
                                       }
                                     },
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: selectedLocation == null 
-                                    ? Colors.grey 
+                                backgroundColor: selectedLocation == null
+                                    ? Colors.grey
                                     : const Color(0xFF2196F3),
                                 foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
@@ -700,8 +756,12 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
     try {
       if (kDebugMode) {
         print('🔍 Calculando rota...');
-        print('  Origem: ${_originLocation!.latitude}, ${_originLocation!.longitude}');
-        print('  Destino: ${_destinationLocation!.latitude}, ${_destinationLocation!.longitude}');
+        print(
+          '  Origem: ${_originLocation!.latitude}, ${_originLocation!.longitude}',
+        );
+        print(
+          '  Destino: ${_destinationLocation!.latitude}, ${_destinationLocation!.longitude}',
+        );
         print('  Pontos de embarque: ${_pickupPoints.length}');
       }
 
@@ -715,7 +775,9 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
 
       if (route != null && route.waypoints.isNotEmpty) {
         if (kDebugMode) {
-          print('✓ Rota calculada com sucesso: ${route.distanceKm.toStringAsFixed(2)} km');
+          print(
+            '✓ Rota calculada com sucesso: ${route.distanceKm.toStringAsFixed(2)} km',
+          );
         }
 
         setState(() {
@@ -727,7 +789,7 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
         // Mostra informações da rota
         final distance = route.distanceKm;
         final duration = route.duration;
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
@@ -867,7 +929,7 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
 
       // Busca todas as caronas do motorista via stream
       final ridesStream = _ridesService.watchRidesByDriver(user.uid);
-      
+
       ridesStream.listen((rides) {
         if (mounted) {
           setState(() {
@@ -937,7 +999,9 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Aceitar Solicitação'),
-        content: Text('Deseja aceitar a solicitação de ${request.passengerName}?'),
+        content: Text(
+          'Deseja aceitar a solicitação de ${request.passengerName}?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -957,7 +1021,7 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
 
     if (confirmed == true) {
       final success = await _requestService.acceptRequest(request.id);
-      
+
       if (mounted) {
         if (success) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -985,7 +1049,9 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Rejeitar Solicitação'),
-        content: Text('Deseja rejeitar a solicitação de ${request.passengerName}?'),
+        content: Text(
+          'Deseja rejeitar a solicitação de ${request.passengerName}?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -1005,7 +1071,7 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
 
     if (confirmed == true) {
       final success = await _requestService.rejectRequest(request.id);
-      
+
       if (mounted) {
         if (success) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1026,7 +1092,7 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
       origin: ride.origin,
       destination: ride.destination,
     );
-    
+
     if (mounted) {
       if (!success) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1046,7 +1112,9 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Finalizar Carona'),
-        content: const Text('Deseja finalizar esta carona? Esta ação não pode ser desfeita.'),
+        content: const Text(
+          'Deseja finalizar esta carona? Esta ação não pode ser desfeita.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -1066,7 +1134,7 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
 
     if (confirmed == true) {
       final success = await _ridesService.completeRide(ride.id);
-      
+
       if (mounted) {
         if (success) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1103,23 +1171,14 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
           tabs: const [
-            Tab(
-              icon: Icon(Icons.add_road),
-              text: 'Nova Carona',
-            ),
-            Tab(
-              icon: Icon(Icons.manage_history),
-              text: 'Minhas Caronas',
-            ),
+            Tab(icon: Icon(Icons.add_road), text: 'Nova Carona'),
+            Tab(icon: Icon(Icons.manage_history), text: 'Minhas Caronas'),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [
-          _buildNewRideTab(),
-          _buildMyRidesTab(),
-        ],
+        children: [_buildNewRideTab(), _buildMyRidesTab()],
       ),
     );
   }
@@ -1129,161 +1188,167 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
     return _isLoadingLocation
         ? const Center(child: CircularProgressIndicator())
         : SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Preview do mapa
-                    if (_originLocation != null || _destinationLocation != null || _routePoints != null) ...[
-                      Container(
-                        height: 250,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.1),
-                              blurRadius: 10,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
-                          child: MapWidget(
-                            initialLocation: _originLocation ?? _destinationLocation,
-                            rides: const [],
-                            showUserLocation: false,
-                            showRideMarkers: false,
-                            routePoints: _routePoints,
-                            pickupPoints: _pickupPoints,
+            padding: const EdgeInsets.all(20),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Preview do mapa
+                  if (_originLocation != null ||
+                      _destinationLocation != null ||
+                      _routePoints != null) ...[
+                    Container(
+                      height: 250,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.1),
+                            blurRadius: 10,
+                            offset: const Offset(0, 2),
                           ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: MapWidget(
+                          initialLocation:
+                              _originLocation ?? _destinationLocation,
+                          rides: const [],
+                          showUserLocation: false,
+                          showRideMarkers: false,
+                          routePoints: _routePoints,
+                          pickupPoints: _pickupPoints,
                         ),
                       ),
-                      const SizedBox(height: 24),
-                    ],
-
-                    // Origem
-                    _buildLocationField(
-                      controller: _originController,
-                      label: 'Origem',
-                      icon: Icons.location_on,
-                      color: Colors.green,
-                      onTap: _searchOrigin,
                     ),
-
-                    const SizedBox(height: 16),
-
-                    // Destino
-                    _buildLocationField(
-                      controller: _destinationController,
-                      label: 'Destino',
-                      icon: Icons.location_city,
-                      color: Colors.red,
-                      onTap: _searchDestination,
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // Botão para adicionar ponto de embarque
-                    if (_originLocation != null && _destinationLocation != null) ...[
-                      OutlinedButton.icon(
-                        onPressed: _addPickupPoint,
-                        icon: const Icon(Icons.add_location),
-                        label: const Text('Adicionar Ponto de Embarque'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF2196F3),
-                          side: const BorderSide(color: Color(0xFF2196F3)),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-
-                    // Pontos de embarque adicionados
-                    if (_pickupPoints.isNotEmpty) ...[
-                      ..._pickupPoints.asMap().entries.map((entry) {
-                        final index = entry.key;
-                        final point = entry.value;
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          child: ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: Colors.orange,
-                              child: Text('${index + 1}'),
-                            ),
-                            title: Text(
-                              point.address ?? 'Ponto de Embarque ${index + 1}',
-                              style: const TextStyle(fontSize: 14),
-                            ),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red),
-                              onPressed: () {
-                                setState(() {
-                                  _pickupPoints.removeAt(index);
-                                  _routePoints = null; // Limpa rota quando remove ponto
-                                });
-                              },
-                            ),
-                          ),
-                        );
-                      }),
-                      const SizedBox(height: 8),
-                    ],
-
-                    // Botão Ver Rota
-                    if (_originLocation != null && _destinationLocation != null) ...[
-                      ElevatedButton.icon(
-                        onPressed: _isLoadingRoute ? null : _showRoute,
-                        icon: _isLoadingRoute
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Icon(Icons.route),
-                        label: const Text('Ver Rota'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF2196F3),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                    ] else
-                      const SizedBox(height: 24),
-
-                    // Data e hora
-                    _buildDateTimeField(),
-
                     const SizedBox(height: 24),
-
-                    // Vagas
-                    _buildSeatsSelector(),
-
-                    const SizedBox(height: 24),
-
-                    // Descrição
-                    _buildDescriptionField(),
-
-                    const SizedBox(height: 32),
-
-                    // Botão de enviar
-                    _buildSubmitButton(),
-
-                    if (_errorMessage != null) ...[
-                      const SizedBox(height: 16),
-                      Text(
-                        _errorMessage!,
-                        style: const TextStyle(color: Colors.red),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
                   ],
-                ),
+
+                  // Origem
+                  _buildLocationField(
+                    controller: _originController,
+                    label: 'Origem',
+                    icon: Icons.location_on,
+                    color: Colors.green,
+                    onTap: _searchOrigin,
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Destino
+                  _buildLocationField(
+                    controller: _destinationController,
+                    label: 'Destino',
+                    icon: Icons.location_city,
+                    color: Colors.red,
+                    onTap: _searchDestination,
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Botão para adicionar ponto de embarque
+                  if (_originLocation != null &&
+                      _destinationLocation != null) ...[
+                    OutlinedButton.icon(
+                      onPressed: _addPickupPoint,
+                      icon: const Icon(Icons.add_location),
+                      label: const Text('Adicionar Ponto de Embarque'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF2196F3),
+                        side: const BorderSide(color: Color(0xFF2196F3)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+
+                  // Pontos de embarque adicionados
+                  if (_pickupPoints.isNotEmpty) ...[
+                    ..._pickupPoints.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final point = entry.value;
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: Colors.orange,
+                            child: Text('${index + 1}'),
+                          ),
+                          title: Text(
+                            point.address ?? 'Ponto de Embarque ${index + 1}',
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.red),
+                            onPressed: () {
+                              setState(() {
+                                _pickupPoints.removeAt(index);
+                                _routePoints =
+                                    null; // Limpa rota quando remove ponto
+                              });
+                            },
+                          ),
+                        ),
+                      );
+                    }),
+                    const SizedBox(height: 8),
+                  ],
+
+                  // Botão Ver Rota
+                  if (_originLocation != null &&
+                      _destinationLocation != null) ...[
+                    ElevatedButton.icon(
+                      onPressed: _isLoadingRoute ? null : _showRoute,
+                      icon: _isLoadingRoute
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.route),
+                      label: const Text('Ver Rota'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF2196F3),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ] else
+                    const SizedBox(height: 24),
+
+                  // Data e hora
+                  _buildDateTimeField(),
+
+                  const SizedBox(height: 24),
+
+                  // Vagas
+                  _buildSeatsSelector(),
+
+                  const SizedBox(height: 24),
+
+                  // Descrição
+                  _buildDescriptionField(),
+
+                  const SizedBox(height: 32),
+
+                  // Botão de enviar
+                  _buildSubmitButton(),
+
+                  if (_errorMessage != null) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      _errorMessage!,
+                      style: const TextStyle(color: Colors.red),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ],
               ),
-            );
+            ),
+          );
   }
 
   /// Campo de localização
@@ -1322,10 +1387,14 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    controller.text.isEmpty ? 'Toque para buscar' : controller.text,
+                    controller.text.isEmpty
+                        ? 'Toque para buscar'
+                        : controller.text,
                     style: TextStyle(
                       fontSize: 16,
-                      color: controller.text.isEmpty ? Colors.grey[400] : Colors.black87,
+                      color: controller.text.isEmpty
+                          ? Colors.grey[400]
+                          : Colors.black87,
                       fontWeight: FontWeight.w500,
                     ),
                     maxLines: 2,
@@ -1372,11 +1441,15 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
                   const SizedBox(height: 4),
                   Text(
                     _selectedDateTime != null
-                        ? DateFormat("dd/MM/yyyy 'às' HH:mm").format(_selectedDateTime!)
+                        ? DateFormat(
+                            "dd/MM/yyyy 'às' HH:mm",
+                          ).format(_selectedDateTime!)
                         : 'Toque para selecionar',
                     style: TextStyle(
                       fontSize: 16,
-                      color: _selectedDateTime != null ? Colors.black87 : Colors.grey[400],
+                      color: _selectedDateTime != null
+                          ? Colors.black87
+                          : Colors.grey[400],
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -1434,7 +1507,7 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
   /// Botão de seleção de vagas
   Widget _buildSeatButton(int seats) {
     final isSelected = _availableSeats == seats;
-    
+
     return InkWell(
       onTap: () {
         setState(() {
@@ -1588,18 +1661,18 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
           child: _isLoadingRides
               ? const Center(child: CircularProgressIndicator())
               : _getFilteredRides().isEmpty
-                  ? _buildEmptyState()
-                  : RefreshIndicator(
-                      onRefresh: _loadMyRides,
-                      child: ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: _getFilteredRides().length,
-                        itemBuilder: (context, index) {
-                          final ride = _getFilteredRides()[index];
-                          return _buildRideCard(ride);
-                        },
-                      ),
-                    ),
+              ? _buildEmptyState()
+              : RefreshIndicator(
+                  onRefresh: _loadMyRides,
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _getFilteredRides().length,
+                    itemBuilder: (context, index) {
+                      final ride = _getFilteredRides()[index];
+                      return _buildRideCard(ride);
+                    },
+                  ),
+                ),
         ),
       ],
     );
@@ -1639,7 +1712,7 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
   /// Chip de filtro
   Widget _buildFilterChip(int index, String label, IconData icon) {
     final isSelected = _selectedFilter == index;
-    
+
     return InkWell(
       onTap: () {
         setState(() {
@@ -1687,9 +1760,7 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       elevation: 2,
       child: ExpansionTile(
         leading: Container(
@@ -1705,10 +1776,7 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
         ),
         title: Text(
           '${ride.origin.address?.split(',').first ?? 'Origem'} → ${ride.destination.address?.split(',').first ?? 'Destino'}',
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
         subtitle: Text(timeStr),
         children: [
@@ -1749,17 +1817,16 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
                 if (pendingRequests.isNotEmpty) ...[
                   const Text(
                     'Solicitações Pendentes',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 12),
-                  ...pendingRequests.map((request) => _buildRequestCard(
-                    request,
-                    onAccept: () => _acceptRequest(request),
-                    onReject: () => _rejectRequest(request),
-                  )),
+                  ...pendingRequests.map(
+                    (request) => _buildRequestCard(
+                      request,
+                      onAccept: () => _acceptRequest(request),
+                      onReject: () => _rejectRequest(request),
+                    ),
+                  ),
                   const SizedBox(height: 16),
                 ],
 
@@ -1774,7 +1841,9 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
                     ),
                   ),
                   const SizedBox(height: 12),
-                  ...acceptedRequests.map((request) => _buildPassengerCard(request)),
+                  ...acceptedRequests.map(
+                    (request) => _buildPassengerCard(request),
+                  ),
                   const SizedBox(height: 16),
                 ],
 
@@ -1817,7 +1886,12 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
   }
 
   /// Linha de detalhe
-  Widget _buildDetailRow(IconData icon, Color color, String label, String value) {
+  Widget _buildDetailRow(
+    IconData icon,
+    Color color,
+    String label,
+    String value,
+  ) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1835,10 +1909,7 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              Text(
-                value,
-                style: const TextStyle(fontSize: 14),
-              ),
+              Text(value, style: const TextStyle(fontSize: 14)),
             ],
           ),
         ),
@@ -1865,9 +1936,7 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
               : null,
         ),
         title: Text(request.passengerName),
-        subtitle: request.message != null
-            ? Text(request.message!)
-            : null,
+        subtitle: request.message != null ? Text(request.message!) : null,
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1930,10 +1999,7 @@ class _OfferRideScreenState extends State<OfferRideScreen> with SingleTickerProv
           const SizedBox(height: 8),
           Text(
             'Ofereça sua primeira carona!',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[500],
-            ),
+            style: TextStyle(fontSize: 14, color: Colors.grey[500]),
           ),
         ],
       ),
@@ -2026,7 +2092,7 @@ class _SearchAddressDialogState extends State<_SearchAddressDialog> {
               ],
             ),
             const SizedBox(height: 16),
-            
+
             // Campo de autocomplete
             AddressAutocomplete(
               label: widget.title,
@@ -2046,10 +2112,7 @@ class _SearchAddressDialogState extends State<_SearchAddressDialog> {
                 decoration: BoxDecoration(
                   color: const Color(0xFF2196F3).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: const Color(0xFF2196F3),
-                    width: 2,
-                  ),
+                  border: Border.all(color: const Color(0xFF2196F3), width: 2),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -2080,10 +2143,7 @@ class _SearchAddressDialogState extends State<_SearchAddressDialog> {
                     Text(
                       'Lat: ${_selectedResult!.location.latitude.toStringAsFixed(6)}, '
                       'Lng: ${_selectedResult!.location.longitude.toStringAsFixed(6)}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                      ),
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                     ),
                   ],
                 ),
@@ -2121,4 +2181,3 @@ class _SearchAddressDialogState extends State<_SearchAddressDialog> {
     );
   }
 }
-

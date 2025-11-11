@@ -6,10 +6,7 @@ import '../services/token_service.dart';
 class VerifyTokenScreen extends StatefulWidget {
   final String email;
 
-  const VerifyTokenScreen({
-    super.key,
-    required this.email,
-  });
+  const VerifyTokenScreen({super.key, required this.email});
 
   @override
   State<VerifyTokenScreen> createState() => _VerifyTokenScreenState();
@@ -19,7 +16,7 @@ class _VerifyTokenScreenState extends State<VerifyTokenScreen> {
   final _formKey = GlobalKey<FormState>();
   final _tokenController = TextEditingController();
   final _tokenService = TokenService();
-  
+
   bool _isLoading = false;
   bool _isVerified = false;
   String? _errorMessage;
@@ -55,13 +52,15 @@ class _VerifyTokenScreenState extends State<VerifyTokenScreen> {
                     children: [
                       // Ícone de verificação
                       Icon(
-                        _isVerified ? Icons.check_circle_outline : Icons.security_outlined,
+                        _isVerified
+                            ? Icons.check_circle_outline
+                            : Icons.security_outlined,
                         size: 60,
                         color: _isVerified ? Colors.green : Colors.white,
                       ),
-                      
+
                       const SizedBox(height: 40),
-                      
+
                       // Título principal
                       Text(
                         _isVerified ? 'Conta Ativada!' : 'Verificar Código',
@@ -72,14 +71,14 @@ class _VerifyTokenScreenState extends State<VerifyTokenScreen> {
                         ),
                         textAlign: TextAlign.center,
                       ),
-                      
+
                       const SizedBox(height: 16),
-                      
+
                       // Subtítulo
                       Text(
-                        _isVerified 
-                          ? 'Sua conta foi ativada com sucesso'
-                          : 'Digite o código de 6 dígitos enviado para:',
+                        _isVerified
+                            ? 'Sua conta foi ativada com sucesso'
+                            : 'Digite o código de 6 dígitos enviado para:',
                         style: const TextStyle(
                           fontSize: 16,
                           color: Colors.white,
@@ -87,7 +86,7 @@ class _VerifyTokenScreenState extends State<VerifyTokenScreen> {
                         ),
                         textAlign: TextAlign.center,
                       ),
-                      
+
                       if (!_isVerified) ...[
                         const SizedBox(height: 8),
                         Text(
@@ -100,9 +99,9 @@ class _VerifyTokenScreenState extends State<VerifyTokenScreen> {
                           textAlign: TextAlign.center,
                         ),
                       ],
-                      
+
                       const SizedBox(height: 60),
-                      
+
                       if (!_isVerified) ...[
                         // Formulário de verificação
                         _buildVerificationForm(),
@@ -110,9 +109,9 @@ class _VerifyTokenScreenState extends State<VerifyTokenScreen> {
                         // Tela de sucesso
                         _buildSuccessView(),
                       ],
-                      
+
                       const SizedBox(height: 40),
-                      
+
                       // Botão de voltar
                       TextButton(
                         onPressed: () {
@@ -171,21 +170,24 @@ class _VerifyTokenScreenState extends State<VerifyTokenScreen> {
                 hintStyle: TextStyle(color: Colors.white54),
                 prefixIcon: Icon(Icons.lock_outline, color: Colors.white70),
                 border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 20,
+                ),
               ),
               validator: (value) {
                 if (value == null || value.isEmpty) {
                   return 'Digite o código de verificação';
                 }
-                
+
                 if (value.length != 6) {
                   return 'O código deve ter 6 dígitos';
                 }
-                
+
                 if (!RegExp(r'^\d{6}$').hasMatch(value)) {
                   return 'Digite apenas números';
                 }
-                
+
                 return null;
               },
               onChanged: (value) {
@@ -198,7 +200,7 @@ class _VerifyTokenScreenState extends State<VerifyTokenScreen> {
               },
             ),
           ),
-          
+
           if (_errorMessage != null) ...[
             const SizedBox(height: 16),
             Container(
@@ -215,19 +217,16 @@ class _VerifyTokenScreenState extends State<VerifyTokenScreen> {
                   Expanded(
                     child: Text(
                       _errorMessage!,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                      ),
+                      style: const TextStyle(color: Colors.white, fontSize: 14),
                     ),
                   ),
                 ],
               ),
             ),
           ],
-          
+
           const SizedBox(height: 24),
-          
+
           // Informação sobre o tempo
           Container(
             padding: const EdgeInsets.all(16),
@@ -243,18 +242,15 @@ class _VerifyTokenScreenState extends State<VerifyTokenScreen> {
                 Expanded(
                   child: Text(
                     'O código expira em 30 minutos após o envio',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                    ),
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
                   ),
                 ),
               ],
             ),
           ),
-          
+
           const SizedBox(height: 32),
-          
+
           // Botão de verificação
           Container(
             width: double.infinity,
@@ -279,7 +275,9 @@ class _VerifyTokenScreenState extends State<VerifyTokenScreen> {
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
                           ),
                         )
                       else
@@ -307,9 +305,9 @@ class _VerifyTokenScreenState extends State<VerifyTokenScreen> {
               ),
             ),
           ),
-          
+
           const SizedBox(height: 16),
-          
+
           // Botão para reenviar código
           TextButton(
             onPressed: _isLoading ? null : _handleResendCode,
@@ -337,14 +335,10 @@ class _VerifyTokenScreenState extends State<VerifyTokenScreen> {
       ),
       child: Column(
         children: [
-          const Icon(
-            Icons.check_circle,
-            size: 64,
-            color: Colors.green,
-          ),
-          
+          const Icon(Icons.check_circle, size: 64, color: Colors.green),
+
           const SizedBox(height: 24),
-          
+
           const Text(
             'Parabéns!',
             style: TextStyle(
@@ -354,20 +348,17 @@ class _VerifyTokenScreenState extends State<VerifyTokenScreen> {
             ),
             textAlign: TextAlign.center,
           ),
-          
+
           const SizedBox(height: 12),
-          
+
           Text(
             'Sua conta foi ativada com sucesso.\nAgora você pode fazer login.',
-            style: const TextStyle(
-              fontSize: 16,
-              color: Colors.white70,
-            ),
+            style: const TextStyle(fontSize: 16, color: Colors.white70),
             textAlign: TextAlign.center,
           ),
-          
+
           const SizedBox(height: 32),
-          
+
           // Botão para ir ao login
           Container(
             width: double.infinity,
@@ -417,15 +408,17 @@ class _VerifyTokenScreenState extends State<VerifyTokenScreen> {
 
     try {
       final token = _tokenController.text.trim();
-      
+
       // Valida o token
       final isValid = await _tokenService.validateToken(token, widget.email);
-      
+
       if (isValid) {
+        await _tokenService.invalidateToken(token, widget.email);
+
         setState(() {
           _isVerified = true;
         });
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -461,10 +454,13 @@ class _VerifyTokenScreenState extends State<VerifyTokenScreen> {
     try {
       // Cria um novo token
       final token = await _tokenService.createActivationToken(widget.email);
-      
+
       // Envia o email novamente
-      final emailSent = await _tokenService.sendActivationEmail(widget.email, token.token);
-      
+      final emailSent = await _tokenService.sendActivationEmail(
+        widget.email,
+        token.token,
+      );
+
       if (emailSent && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -473,7 +469,7 @@ class _VerifyTokenScreenState extends State<VerifyTokenScreen> {
             duration: const Duration(seconds: 3),
           ),
         );
-        
+
         // Limpa o campo de token
         _tokenController.clear();
       } else {

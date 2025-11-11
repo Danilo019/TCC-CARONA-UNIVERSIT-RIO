@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/auth_service.dart';
 import '../services/token_service.dart';
-import '../services/firestore_service.dart';
 import '../utils/password_validator.dart';
 import '../widgets/password_strength_indicator.dart';
 
@@ -28,8 +27,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   final _confirmPasswordController = TextEditingController();
   final AuthService _authService = AuthService();
   final TokenService _tokenService = TokenService();
-  final FirestoreService _firestoreService = FirestoreService();
-  
+
   bool _isLoading = false;
   bool _passwordReset = false;
   String? _errorMessage;
@@ -130,10 +128,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                 if (!_passwordReset)
                   Text(
                     'Email: ${widget.email}',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
-                    ),
+                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                     textAlign: TextAlign.center,
                   )
                 else
@@ -204,17 +199,23 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                       if (value == null || value.isEmpty) {
                         return 'Digite a nova senha';
                       }
-                      
-                      final validation = PasswordValidator.validatePassword(value);
+
+                      final validation = PasswordValidator.validatePassword(
+                        value,
+                      );
                       if (!validation.isValid) {
-                        return validation.message ?? 'Senha não atende aos requisitos';
+                        return validation.message ??
+                            'Senha não atende aos requisitos';
                       }
-                      
+
                       // Verifica se contém informações pessoais
-                      if (PasswordValidator.containsPersonalInfo(value, widget.email)) {
+                      if (PasswordValidator.containsPersonalInfo(
+                        value,
+                        widget.email,
+                      )) {
                         return 'A senha não deve conter informações do seu email';
                       }
-                      
+
                       return null;
                     },
                   ),
@@ -249,10 +250,28 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        _buildRequirement('Mínimo de 8 caracteres', _newPasswordController.text.length >= 8),
-                        _buildRequirement('1 letra maiúscula', _newPasswordController.text.contains(RegExp(r'[A-Z]'))),
-                        _buildRequirement('1 número', _newPasswordController.text.contains(RegExp(r'[0-9]'))),
-                        _buildRequirement('1 caractere especial (!@#\$%&*)', _newPasswordController.text.contains(RegExp(r'[!@#$%&*]'))),
+                        _buildRequirement(
+                          'Mínimo de 8 caracteres',
+                          _newPasswordController.text.length >= 8,
+                        ),
+                        _buildRequirement(
+                          '1 letra maiúscula',
+                          _newPasswordController.text.contains(
+                            RegExp(r'[A-Z]'),
+                          ),
+                        ),
+                        _buildRequirement(
+                          '1 número',
+                          _newPasswordController.text.contains(
+                            RegExp(r'[0-9]'),
+                          ),
+                        ),
+                        _buildRequirement(
+                          '1 caractere especial (!@#\$%&*)',
+                          _newPasswordController.text.contains(
+                            RegExp(r'[!@#$%&*]'),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -347,8 +366,9 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                               height: 24,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                valueColor:
-                                    AlwaysStoppedAnimation<Color>(Colors.white),
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
                               ),
                             )
                           : const Text(
@@ -406,7 +426,11 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.error_outline, color: Colors.red[700], size: 20),
+                        Icon(
+                          Icons.error_outline,
+                          color: Colors.red[700],
+                          size: 20,
+                        ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
@@ -467,7 +491,9 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     final validation = PasswordValidator.validatePassword(newPassword);
     if (!validation.isValid) {
       setState(() {
-        _errorMessage = validation.message ?? 'A senha não atende aos requisitos mínimos de segurança.';
+        _errorMessage =
+            validation.message ??
+            'A senha não atende aos requisitos mínimos de segurança.';
       });
       return;
     }
@@ -487,18 +513,15 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
     try {
       // 1. Valida o token antes de redefinir
-      final tokenInfo = await _tokenService.getToken(widget.token);
-      
-      if (tokenInfo == null) {
-        throw Exception('Token inválido ou expirado. Por favor, solicite um novo código.');
-      }
-      
-      if (tokenInfo.email != widget.email) {
-        throw Exception('Token não corresponde ao email informado.');
-      }
-      
-      if (tokenInfo.isExpired) {
-        throw Exception('Token expirado. Por favor, solicite um novo código.');
+      final isValid = await _tokenService.validateToken(
+        widget.token,
+        widget.email,
+      );
+
+      if (!isValid) {
+        throw Exception(
+          'Token inválido ou expirado. Por favor, solicite um novo código.',
+        );
       }
 
       // 2. Tenta redefinir a senha
@@ -508,10 +531,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
           widget.token,
           newPassword,
         );
-        
+
         // Se chegou aqui, o reset foi direto (futuro com Cloud Functions)
-        await _invalidateToken();
-        
         if (mounted) {
           setState(() {
             _passwordReset = true;
@@ -528,7 +549,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
           // Aguarda um pouco e volta para login
           await Future.delayed(const Duration(seconds: 2));
-          
+
           if (mounted) {
             Navigator.pushNamedAndRemoveUntil(
               context,
@@ -539,7 +560,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         }
       } catch (e) {
         // Se a Cloud Function não está implementada, mostra instruções
-        if (e.toString().contains('Cloud Function não encontrada') || 
+        if (e.toString().contains('Cloud Function não encontrada') ||
             e.toString().contains('NOT_FOUND')) {
           if (mounted) {
             setState(() {
@@ -590,41 +611,30 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     } catch (e) {
       // Tratamento de erros específicos
       String errorMessage = 'Erro ao redefinir senha';
-      
-      if (e.toString().contains('Token inválido') || e.toString().contains('Token expirado')) {
-        errorMessage = 'Token inválido ou expirado. Por favor, solicite um novo código.';
+
+      if (e.toString().contains('Token inválido') ||
+          e.toString().contains('Token expirado')) {
+        errorMessage =
+            'Token inválido ou expirado. Por favor, solicite um novo código.';
       } else if (e.toString().contains('weak-password')) {
-        errorMessage = 'A senha deve atender aos requisitos mínimos de segurança.';
-      } else if (e.toString().contains('network') || e.toString().contains('connection')) {
-        errorMessage = 'Erro ao conectar ao servidor. Verifique sua conexão e tente novamente.';
+        errorMessage =
+            'A senha deve atender aos requisitos mínimos de segurança.';
+      } else if (e.toString().contains('network') ||
+          e.toString().contains('connection')) {
+        errorMessage =
+            'Erro ao conectar ao servidor. Verifique sua conexão e tente novamente.';
       } else if (e.toString().contains('too-many-requests')) {
-        errorMessage = 'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
+        errorMessage =
+            'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
       } else {
         errorMessage = 'Erro ao redefinir senha: ${e.toString()}';
       }
-      
+
       if (mounted) {
         setState(() {
           _errorMessage = errorMessage;
           _isLoading = false;
         });
-      }
-    }
-  }
-
-  /// Invalida o token após uso bem-sucedido
-  Future<void> _invalidateToken() async {
-    try {
-      // Garante que o token está marcado como usado
-      final tokenInfo = await _tokenService.getToken(widget.token);
-      if (tokenInfo != null && !tokenInfo.isUsed) {
-        // Marca como usado através do FirestoreService
-        await _firestoreService.validateAndUseToken(widget.token, widget.email);
-      }
-    } catch (e) {
-      // Log silencioso - não bloqueia o fluxo se falhar
-      if (mounted) {
-        debugPrint('Aviso: Não foi possível invalidar token: $e');
       }
     }
   }

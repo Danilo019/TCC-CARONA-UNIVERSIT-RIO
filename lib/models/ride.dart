@@ -1,5 +1,5 @@
-import 'location.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'location.dart';
 
 /// Modelo para representar uma carona
 class Ride {
@@ -18,6 +18,8 @@ class Ride {
   final String status; // 'active', 'in_progress', 'completed', 'cancelled'
   final DateTime createdAt;
   final DateTime? updatedAt;
+  final GeoPoint? originGeoPoint;
+  final String? originGeoHash;
 
   const Ride({
     required this.id,
@@ -35,6 +37,8 @@ class Ride {
     this.status = 'active',
     required this.createdAt,
     this.updatedAt,
+    this.originGeoPoint,
+    this.originGeoHash,
   });
 
   /// Cria uma Ride a partir de um DocumentSnapshot do Firestore
@@ -80,6 +84,8 @@ class Ride {
         updatedAt: data['updatedAt'] != null 
             ? parseDateTime(data['updatedAt']) 
             : null,
+        originGeoPoint: data['originGeoPoint'] is GeoPoint ? data['originGeoPoint'] as GeoPoint : null,
+        originGeoHash: data['originGeoHash'] as String?,
       );
       
       return ride;
@@ -107,6 +113,9 @@ class Ride {
       'status': status,
       'createdAt': createdAt,
       'updatedAt': updatedAt,
+      'originGeoPoint': originGeoPoint,
+      'originGeoHash': originGeoHash,
+      'isAvailable': status == 'active' && availableSeats > 0,
     };
   }
 
@@ -127,6 +136,8 @@ class Ride {
     String? status,
     DateTime? createdAt,
     DateTime? updatedAt,
+    GeoPoint? originGeoPoint,
+    String? originGeoHash,
   }) {
     return Ride(
       id: id ?? this.id,
@@ -144,6 +155,8 @@ class Ride {
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      originGeoPoint: originGeoPoint ?? this.originGeoPoint,
+      originGeoHash: originGeoHash ?? this.originGeoHash,
     );
   }
 

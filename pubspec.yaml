@@ -26,6 +26,15 @@ dependencies:
   
   # Provider para gerenciamento de estado
   provider: ^6.1.1
+
+  # Notificações
+  firebase_messaging: ^15.1.2
+  flutter_local_notifications: ^17.2.4
+  timezone: ^0.9.3
+
+  # Exportação e compartilhamento de dados
+  path_provider: ^2.1.4
+  share_plus: ^10.1.2
   
   # Armazenamento local
   shared_preferences: ^2.3.3
@@ -38,6 +47,9 @@ dependencies:
   permission_handler: ^11.3.1
   google_maps_flutter: ^2.10.0
   url_launcher: ^6.3.1
+  
+  # Variáveis de ambiente
+  flutter_dotenv: ^5.1.0
 
 dev_dependencies:
   flutter_test:
@@ -50,6 +62,7 @@ flutter:
 
   assets:
     - assets/images/
+    - .env #variáveis de ambiente
 
   fonts:
     - family: NotoSerif

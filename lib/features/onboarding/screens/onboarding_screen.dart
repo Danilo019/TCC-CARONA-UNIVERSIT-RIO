@@ -121,6 +121,26 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               _buildNextButton(),
             ],
           ),
+          
+          const SizedBox(height: 16),
+          
+          // Link para Política de Privacidade
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pushNamed('/privacy-policy');
+            },
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.textOnDarkSecondary,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            ),
+            child: const Text(
+              'Política de Privacidade',
+              style: TextStyle(
+                fontSize: 12,
+                decoration: TextDecoration.underline,
+              ),
+            ),
+          ),
         ],
       ),
     );

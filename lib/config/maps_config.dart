@@ -1,9 +1,15 @@
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter/foundation.dart';
+
 /// Configurações para Google Maps
 class MapsConfig {
-  // API Key do Google Maps
-  // IMPORTANTE: Substitua pela sua API Key obtida no Google Cloud Console
+  // API Key do Google Maps (lê do .env)
+  // IMPORTANTE: Configure no arquivo .env a variável GOOGLE_MAPS_API_KEY
+  // Obtenha sua API Key no Google Cloud Console
   // https://console.cloud.google.com/google/maps-apis
-  static const String apiKey = 'AIzaSyDsdoPF0ImH-GjHmRUiCQx9S4sYx-qqMEc';
+  static String get apiKey => 
+      dotenv.env['GOOGLE_MAPS_API_KEY'] ?? 
+      (kDebugMode ? 'AIzaSyDsdoPF0ImH-GjHmRUiCQx9S4sYx-qqMEc' : '');
 
   // Configuração padrão do mapa
   static const double defaultZoom = 14.0;
@@ -17,7 +23,10 @@ class MapsConfig {
 
   /// Verifica se a API Key foi configurada
   static bool get isApiKeyConfigured {
-    return apiKey.isNotEmpty && apiKey != 'SUA_API_KEY_AQUI';
+    final key = apiKey;
+    return key.isNotEmpty && 
+           key != 'SUA_API_KEY_AQUI' && 
+           !key.contains('SUA_API_KEY');
   }
 
   /// Retorna configuração completa do mapa

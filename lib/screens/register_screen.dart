@@ -1,8 +1,10 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:email_validator/email_validator.dart';
 import '../services/token_service.dart';
 import '../services/auth_service.dart';
+import '../services/consent_service.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -19,11 +21,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _tokenController = TextEditingController();
   final _tokenService = TokenService();
   final _authService = AuthService();
-  
+  final _consentService = ConsentService();
+
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _isEmailSent = false;
+  bool _acceptedPrivacyPolicy = false; // Checkbox de aceite da política
 
   @override
   void dispose() {
@@ -65,9 +69,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           size: 60,
                           color: Colors.white,
                         ),
-                        
+
                         const SizedBox(height: 40),
-                        
+
                         // Título principal
                         const Text(
                           'Criar Conta',
@@ -78,14 +82,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                           textAlign: TextAlign.center,
                         ),
-                        
+
                         const SizedBox(height: 16),
-                        
+
                         // Subtítulo
                         Text(
-                          _isEmailSent 
-                            ? 'Verifique seu e-mail acadêmico e digite o código de ativação'
-                            : 'Preencha os dados para criar sua conta acadêmica',
+                          _isEmailSent
+                              ? 'Verifique seu e-mail acadêmico e digite o código de ativação'
+                              : 'Preencha os dados para criar sua conta acadêmica',
                           style: const TextStyle(
                             fontSize: 16,
                             color: Colors.white,
@@ -93,9 +97,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                           textAlign: TextAlign.center,
                         ),
-                        
+
                         const SizedBox(height: 40),
-                        
+
                         if (!_isEmailSent) ...[
                           // Formulário de cadastro
                           _buildRegisterForm(),
@@ -103,9 +107,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           // Formulário de verificação
                           _buildVerificationForm(),
                         ],
-                        
+
                         const SizedBox(height: 40),
-                        
+
                         // Link para voltar ao login
                         TextButton(
                           onPressed: () {
@@ -153,28 +157,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
               hintStyle: TextStyle(color: Colors.white54),
               prefixIcon: Icon(Icons.email_outlined, color: Colors.white70),
               border: InputBorder.none,
-              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 16,
+              ),
             ),
             validator: (value) {
               if (value == null || value.isEmpty) {
                 return 'Digite seu e-mail acadêmico';
               }
-              
+
               if (!EmailValidator.validate(value)) {
                 return 'Digite um e-mail válido';
               }
-              
+
               if (!value.endsWith('@cs.udf.edu.br')) {
                 return 'Apenas emails @cs.udf.edu.br são permitidos';
               }
-              
+
               return null;
             },
           ),
         ),
-        
+
         const SizedBox(height: 16),
-        
+
         // Campo de senha
         Container(
           decoration: BoxDecoration(
@@ -204,24 +211,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 },
               ),
               border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 16,
+              ),
             ),
             validator: (value) {
               if (value == null || value.isEmpty) {
                 return 'Digite sua senha';
               }
-              
+
               if (value.length < 6) {
                 return 'A senha deve ter pelo menos 6 caracteres';
               }
-              
+
               return null;
             },
           ),
         ),
-        
+
         const SizedBox(height: 16),
-        
+
         // Campo de confirmação de senha
         Container(
           decoration: BoxDecoration(
@@ -241,7 +251,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
               prefixIcon: const Icon(Icons.lock_outline, color: Colors.white70),
               suffixIcon: IconButton(
                 icon: Icon(
-                  _obscureConfirmPassword ? Icons.visibility : Icons.visibility_off,
+                  _obscureConfirmPassword
+                      ? Icons.visibility
+                      : Icons.visibility_off,
                   color: Colors.white70,
                 ),
                 onPressed: () {
@@ -251,24 +263,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 },
               ),
               border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 16,
+              ),
             ),
             validator: (value) {
               if (value == null || value.isEmpty) {
                 return 'Confirme sua senha';
               }
-              
+
               if (value != _passwordController.text) {
                 return 'As senhas não coincidem';
               }
-              
+
               return null;
             },
           ),
         ),
-        
+
         const SizedBox(height: 16),
-        
+
         // Informação sobre o processo
         Container(
           padding: const EdgeInsets.all(16),
@@ -284,54 +299,118 @@ class _RegisterScreenState extends State<RegisterScreen> {
               Expanded(
                 child: Text(
                   'Após o cadastro, você receberá um código de ativação no seu e-mail acadêmico',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
+                  style: const TextStyle(color: Colors.white, fontSize: 14),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 16),
+
+        // Checkbox de aceite da Política de Privacidade
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Checkbox(
+                value: _acceptedPrivacyPolicy,
+                onChanged: (value) {
+                  setState(() {
+                    _acceptedPrivacyPolicy = value ?? false;
+                  });
+                },
+                activeColor: Colors.white,
+                checkColor: const Color(0xFF1A365D),
+                side: BorderSide(color: Colors.white.withValues(alpha: 0.7)),
+              ),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () async {
+                    // Abre a tela de política e aguarda resultado
+                    final accepted =
+                        await Navigator.of(context).pushNamed('/privacy-policy')
+                            as bool?;
+                    if (accepted == true && mounted) {
+                      setState(() {
+                        _acceptedPrivacyPolicy = true;
+                      });
+                    }
+                  },
+                  child: RichText(
+                    text: TextSpan(
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        height: 1.4,
+                      ),
+                      children: [
+                        const TextSpan(text: 'Eu aceito a '),
+                        TextSpan(
+                          text: 'Política de Privacidade',
+                          style: const TextStyle(
+                            decoration: TextDecoration.underline,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const TextSpan(
+                          text:
+                              ' e concordo com o tratamento de meus dados pessoais conforme a LGPD.',
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ],
           ),
         ),
-        
+
         const SizedBox(height: 24),
-        
+
         // Botão de cadastro
-                        Container(
-                          width: double.infinity,
-                          height: 56,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1A365D),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(12),
-                              onTap: _isLoading ? null : _handleRegister,
-                              child: Center(
-                                child: _isLoading
-                                    ? const SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                        ),
-                                      )
-                                    : const Text(
-                                        'Criar Conta',
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                              ),
-                            ),
+        Container(
+          width: double.infinity,
+          height: 56,
+          decoration: BoxDecoration(
+            color: const Color(0xFF1A365D),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: _isLoading ? null : _handleRegister,
+              child: Center(
+                child: _isLoading
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
                           ),
                         ),
-                        
+                      )
+                    : const Text(
+                        'Criar Conta',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -354,18 +433,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
               Expanded(
                 child: Text(
                   'Código enviado para: ${_emailController.text}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                  ),
+                  style: const TextStyle(color: Colors.white, fontSize: 14),
                 ),
               ),
             ],
           ),
         ),
-        
+
         const SizedBox(height: 24),
-        
+
         // Campo de token
         Container(
           decoration: BoxDecoration(
@@ -390,28 +466,97 @@ class _RegisterScreenState extends State<RegisterScreen> {
               hintStyle: TextStyle(color: Colors.white54),
               prefixIcon: Icon(Icons.security_outlined, color: Colors.white70),
               border: InputBorder.none,
-              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 20,
+              ),
             ),
             validator: (value) {
               if (value == null || value.isEmpty) {
                 return 'Digite o código de verificação';
               }
-              
+
               if (value.length != 6) {
                 return 'O código deve ter 6 dígitos';
               }
-              
+
               if (!RegExp(r'^\d{6}$').hasMatch(value)) {
                 return 'Digite apenas números';
               }
-              
+
               return null;
             },
           ),
         ),
-        
+
         const SizedBox(height: 24),
-        
+
+        // Checkbox de aceite da Política de Privacidade (também na etapa de verificação)
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Checkbox(
+                value: _acceptedPrivacyPolicy,
+                onChanged: (value) {
+                  setState(() {
+                    _acceptedPrivacyPolicy = value ?? false;
+                  });
+                },
+                activeColor: Colors.white,
+                checkColor: const Color(0xFF1A365D),
+                side: BorderSide(color: Colors.white.withValues(alpha: 0.7)),
+              ),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () async {
+                    // Abre a tela de política e aguarda resultado
+                    final accepted =
+                        await Navigator.of(context).pushNamed('/privacy-policy')
+                            as bool?;
+                    if (accepted == true && mounted) {
+                      setState(() {
+                        _acceptedPrivacyPolicy = true;
+                      });
+                    }
+                  },
+                  child: RichText(
+                    text: TextSpan(
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        height: 1.4,
+                      ),
+                      children: [
+                        const TextSpan(text: 'Eu aceito a '),
+                        TextSpan(
+                          text: 'Política de Privacidade',
+                          style: const TextStyle(
+                            decoration: TextDecoration.underline,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const TextSpan(
+                          text:
+                              ' e concordo com o tratamento de meus dados pessoais conforme a LGPD.',
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 24),
+
         // Botão de verificação
         Container(
           width: double.infinity,
@@ -432,7 +577,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         height: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
                         ),
                       )
                     : const Text(
@@ -447,9 +594,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
           ),
         ),
-        
+
         const SizedBox(height: 16),
-        
+
         // Botão para reenviar código
         TextButton(
           onPressed: _isLoading ? null : _handleResendCode,
@@ -471,24 +618,41 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
+    // Valida aceite da política de privacidade
+    if (!_acceptedPrivacyPolicy) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Você precisa aceitar a Política de Privacidade para continuar',
+          ),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _isLoading = true;
     });
 
     try {
       final email = _emailController.text.trim();
-      
+
       // Cria o token de ativação
       final token = await _tokenService.createActivationToken(email);
-      
+
       // Envia o email com o token
-      final emailSent = await _tokenService.sendActivationEmail(email, token.token);
-      
+      final emailSent = await _tokenService.sendActivationEmail(
+        email,
+        token.token,
+      );
+
       if (emailSent) {
         setState(() {
           _isEmailSent = true;
         });
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -525,6 +689,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
+    // Valida aceite da política de privacidade também na etapa de verificação
+    if (!_acceptedPrivacyPolicy) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Você precisa aceitar a Política de Privacidade para continuar',
+          ),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _isLoading = true;
     });
@@ -533,36 +711,61 @@ class _RegisterScreenState extends State<RegisterScreen> {
       final token = _tokenController.text.trim();
       final email = _emailController.text.trim();
       final password = _passwordController.text.trim();
-      
+
       // Valida o token
       final isValid = await _tokenService.validateToken(token, email);
-      
+
       if (!isValid) {
         throw Exception('Código inválido ou expirado');
       }
-      
+
       // Cria conta no Firebase Auth após validação do token
-      final user = await _authService.createAccountAfterTokenValidation(email, password);
-      
-      if (user != null && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Conta criada com sucesso!'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 3),
-          ),
+      final user = await _authService.createAccountAfterTokenValidation(
+        email,
+        password,
+      );
+
+      if (user != null) {
+        await _tokenService.invalidateToken(token, email);
+
+        // Salva consentimento da política de privacidade
+        final consentSaved = await _consentService.savePrivacyPolicyConsent(
+          userId: user.uid,
+          email: email,
+          accepted: true,
+          version: ConsentService.currentPrivacyPolicyVersion,
         );
 
-        // Aguarda um pouco para mostrar a mensagem
-        await Future.delayed(const Duration(milliseconds: 500));
+        if (kDebugMode) {
+          if (consentSaved) {
+            print(
+              '✓ Consentimento da política de privacidade salvo com sucesso',
+            );
+          } else {
+            print('✗ Erro ao salvar consentimento da política de privacidade');
+          }
+        }
 
-        // Navega para a tela de login
         if (mounted) {
-          Navigator.pushNamedAndRemoveUntil(
-            context,
-            '/login',
-            (route) => false,
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Conta criada com sucesso!'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 3),
+            ),
           );
+
+          // Aguarda um pouco para mostrar a mensagem
+          await Future.delayed(const Duration(milliseconds: 500));
+
+          // Navega para a tela de login
+          if (mounted) {
+            Navigator.pushNamedAndRemoveUntil(
+              context,
+              '/login',
+              (route) => false,
+            );
+          }
         }
       }
     } catch (e) {
@@ -591,13 +794,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     try {
       final email = _emailController.text.trim();
-      
+
       // Cria um novo token
       final token = await _tokenService.createActivationToken(email);
-      
+
       // Envia o email novamente
-      final emailSent = await _tokenService.sendActivationEmail(email, token.token);
-      
+      final emailSent = await _tokenService.sendActivationEmail(
+        email,
+        token.token,
+      );
+
       if (emailSent && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -606,7 +812,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             duration: const Duration(seconds: 3),
           ),
         );
-        
+
         // Limpa o campo de token
         _tokenController.clear();
       } else {
@@ -630,5 +836,4 @@ class _RegisterScreenState extends State<RegisterScreen> {
       }
     }
   }
-
 }

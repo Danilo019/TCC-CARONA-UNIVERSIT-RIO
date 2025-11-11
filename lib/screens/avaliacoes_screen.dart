@@ -430,10 +430,10 @@ class _AvaliacoesScreenState extends State<AvaliacoesScreen> {
                     backgroundImage: carona.avaliadoPhotoURL != null
                         ? NetworkImage(carona.avaliadoPhotoURL!)
                         : null,
+                    radius: 24,
                     child: carona.avaliadoPhotoURL == null
                         ? const Icon(Icons.person)
                         : null,
-                    radius: 24,
                   ),
                   const SizedBox(width: 12),
                   Expanded(

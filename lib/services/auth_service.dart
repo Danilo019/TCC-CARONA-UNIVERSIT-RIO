@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../config/firebase_config.dart';
 import 'token_service.dart';
 import 'firestore_service.dart';
+import 'account_deletion_service.dart';
 import '../models/auth_user.dart';
 
 class AuthService {
@@ -51,7 +52,10 @@ class AuthService {
   // ===========================================================================
 
   /// Realiza login com email e senha
-  Future<User?> signInWithEmailAndPassword(String email, String password) async {
+  Future<User?> signInWithEmailAndPassword(
+    String email,
+    String password,
+  ) async {
     try {
       if (!isUDFEmail(email)) {
         throw Exception('Apenas emails @cs.udf.edu.br são permitidos');
@@ -66,7 +70,7 @@ class AuthService {
       if (user != null) {
         // Atualiza lastSignIn no Firestore
         await _firestoreService.updateLastSignIn(user.uid);
-        
+
         if (kDebugMode) {
           print('✓ Login bem-sucedido: ${user.email}');
         }
@@ -77,7 +81,7 @@ class AuthService {
       if (kDebugMode) {
         print('✗ Erro no login: ${e.code} - ${e.message}');
       }
-      
+
       String errorMessage = 'Erro ao fazer login';
       if (e.code == 'user-not-found' || e.code == 'wrong-password') {
         errorMessage = 'Email ou senha incorretos';
@@ -88,7 +92,7 @@ class AuthService {
       } else if (e.code == 'too-many-requests') {
         errorMessage = 'Muitas tentativas. Tente novamente mais tarde.';
       }
-      
+
       throw Exception(errorMessage);
     } catch (e) {
       if (kDebugMode) {
@@ -99,7 +103,10 @@ class AuthService {
   }
 
   /// Cria conta com email e senha
-  Future<User?> createUserWithEmailAndPassword(String email, String password) async {
+  Future<User?> createUserWithEmailAndPassword(
+    String email,
+    String password,
+  ) async {
     try {
       if (!isUDFEmail(email)) {
         throw Exception('Apenas emails @cs.udf.edu.br são permitidos');
@@ -122,14 +129,16 @@ class AuthService {
           creationTime: user.metadata.creationTime,
           lastSignInTime: user.metadata.lastSignInTime,
         );
-        
+
         await _firestoreService.saveUser(authUser);
-        
+
         // Envia email de verificação automaticamente após criar conta
         try {
           await user.sendEmailVerification();
           if (kDebugMode) {
-            print('✓ Email de verificação enviado automaticamente para: ${user.email}');
+            print(
+              '✓ Email de verificação enviado automaticamente para: ${user.email}',
+            );
           }
         } catch (e) {
           // Não bloqueia a criação da conta se o envio de email falhar
@@ -137,7 +146,7 @@ class AuthService {
             print('⚠ Não foi possível enviar email de verificação: $e');
           }
         }
-        
+
         if (kDebugMode) {
           print('✓ Conta criada: ${user.email}');
         }
@@ -148,7 +157,7 @@ class AuthService {
       if (kDebugMode) {
         print('✗ Erro ao criar conta: ${e.code} - ${e.message}');
       }
-      
+
       String errorMessage = 'Erro ao criar conta';
       if (e.code == 'email-already-in-use') {
         errorMessage = 'Este email já está em uso';
@@ -159,7 +168,7 @@ class AuthService {
       } else if (e.code == 'operation-not-allowed') {
         errorMessage = 'Operação não permitida';
       }
-      
+
       throw Exception(errorMessage);
     } catch (e) {
       if (kDebugMode) {
@@ -170,15 +179,18 @@ class AuthService {
   }
 
   /// Cria conta após validação de token
-  Future<User?> createAccountAfterTokenValidation(String email, String password) async {
+  Future<User?> createAccountAfterTokenValidation(
+    String email,
+    String password,
+  ) async {
     try {
       // Cria conta no Firebase Auth
       final user = await createUserWithEmailAndPassword(email, password);
-      
+
       if (user != null && kDebugMode) {
         print('✓ Conta criada após validação de token: ${user.email}');
       }
-      
+
       return user;
     } catch (e) {
       if (kDebugMode) {
@@ -259,7 +271,7 @@ class AuthService {
     try {
       // Limpa o token de sessão
       _currentSessionToken = null;
-      
+
       // Logout do Firebase
       await _firebaseAuth.signOut();
 
@@ -285,11 +297,11 @@ class AuthService {
 
       // Verifica se há um usuário autenticado
       final currentUser = _firebaseAuth.currentUser;
-      
+
       if (currentUser != null && currentUser.email == email) {
         // Se o usuário já está autenticado, atualiza a senha diretamente
         await currentUser.updatePassword(newPassword);
-        
+
         if (kDebugMode) {
           print('✓ Senha atualizada com sucesso para: $email');
         }
@@ -299,7 +311,7 @@ class AuthService {
         // Para uma solução completa, você precisaria de um backend com Admin SDK
         throw Exception(
           'Para redefinir a senha, você precisa estar autenticado. '
-          'Por favor, faça login primeiro ou use o link de recuperação do Firebase.'
+          'Por favor, faça login primeiro ou use o link de recuperação do Firebase.',
         );
       }
     } catch (e) {
@@ -313,30 +325,25 @@ class AuthService {
   /// Redefine a senha usando token via Backend API ou Cloud Functions
   /// Esta solução atualiza a senha diretamente no Firebase Authentication
   /// Fluxo simplificado: validar token → atualizar senha automaticamente
-  /// 
+  ///
   /// Tenta primeiro usar Backend API (funciona sem plano Blaze)
   /// Se não configurado, tenta usar Cloud Functions
-  Future<void> resetPasswordWithToken(String email, String token, String newPassword) async {
+  Future<void> resetPasswordWithToken(
+    String email,
+    String token,
+    String newPassword,
+  ) async {
     try {
       // Verificação básica do token (já foi validado antes, mas valida novamente para segurança)
-      final tokenService = TokenService();
-      final tokenInfo = await tokenService.getToken(token);
-      
-      if (tokenInfo == null) {
-        throw Exception('Token não encontrado');
-      }
-      
-      if (tokenInfo.email != email) {
-        throw Exception('Token não corresponde ao email');
-      }
-      
-      if (tokenInfo.isExpired) {
+      final isTokenValid = await _tokenService.validateToken(token, email);
+
+      if (!isTokenValid) {
         throw Exception('Token expirado. Por favor, solicite um novo código.');
       }
 
       // Tenta primeiro usar Backend API (se configurado)
       // Configure a URL do backend em FirebaseConfig.backendUrl
-      const backendUrl = FirebaseConfig.backendUrl;
+      final backendUrl = FirebaseConfig.backendUrl;
       if (backendUrl != null && backendUrl.isNotEmpty) {
         try {
           if (kDebugMode) {
@@ -345,50 +352,63 @@ class AuthService {
 
           final uri = Uri.parse(backendUrl);
           if (!uri.hasScheme) {
-            throw Exception('URL do backend inválida. Verifique a configuração em FirebaseConfig.');
+            throw Exception(
+              'URL do backend inválida. Verifique a configuração em FirebaseConfig.',
+            );
           }
 
-          final response = await http.post(
-            Uri.parse('$backendUrl/api/reset-password'),
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: jsonEncode({
-              'email': email,
-              'token': token,
-              'newPassword': newPassword,
-            }),
-          ).timeout(
-            const Duration(seconds: 30),
-            onTimeout: () {
-              throw Exception('Tempo esgotado. Verifique sua conexão e tente novamente.');
-            },
-          );
+          final response = await http
+              .post(
+                Uri.parse('$backendUrl/api/reset-password'),
+                headers: {'Content-Type': 'application/json'},
+                body: jsonEncode({
+                  'email': email,
+                  'token': token,
+                  'newPassword': newPassword,
+                }),
+              )
+              .timeout(
+                const Duration(seconds: 30),
+                onTimeout: () {
+                  throw Exception(
+                    'Tempo esgotado. Verifique sua conexão e tente novamente.',
+                  );
+                },
+              );
 
-          final responseData = jsonDecode(response.body) as Map<String, dynamic>;
+          final responseData =
+              jsonDecode(response.body) as Map<String, dynamic>;
 
           if (response.statusCode == 200 && responseData['success'] == true) {
+            await _tokenService.invalidateToken(token, email);
             if (kDebugMode) {
               print('✓ Senha redefinida com sucesso via Backend API!');
             }
             return;
           } else {
             // Extrai mensagem de erro específica do backend
-            final errorMessage = responseData['message'] ?? 
-                                responseData['error'] ?? 
-                                'Erro ao redefinir senha';
-            
+            final errorMessage =
+                responseData['message'] ??
+                responseData['error'] ??
+                'Erro ao redefinir senha';
+
             // Trata erros específicos do backend
-            if (response.statusCode == 404 || 
-                errorMessage.toString().toLowerCase().contains('não encontrado') ||
+            if (response.statusCode == 404 ||
+                errorMessage.toString().toLowerCase().contains(
+                  'não encontrado',
+                ) ||
                 errorMessage.toString().toLowerCase().contains('not found')) {
-              throw Exception('Token invalido ou expirado. Por favor solicite um novo código.');
-            } else if (response.statusCode == 403 || 
-                       errorMessage.toString().toLowerCase().contains('expirado') ||
-                       errorMessage.toString().toLowerCase().contains('expired')) {
-              throw Exception('Token invalido ou expirado. Por favor solicite um novo código.');
+              throw Exception(
+                'Token invalido ou expirado. Por favor solicite um novo código.',
+              );
+            } else if (response.statusCode == 403 ||
+                errorMessage.toString().toLowerCase().contains('expirado') ||
+                errorMessage.toString().toLowerCase().contains('expired')) {
+              throw Exception(
+                'Token invalido ou expirado. Por favor solicite um novo código.',
+              );
             }
-            
+
             throw Exception(errorMessage);
           }
         } catch (e) {
@@ -402,22 +422,24 @@ class AuthService {
 
       // Fallback: Tenta usar Cloud Functions
       try {
-        final callable = FirebaseFunctions.instance.httpsCallable('resetPassword');
-        
+        final callable = FirebaseFunctions.instance.httpsCallable(
+          'resetPassword',
+        );
+
         if (kDebugMode) {
           print('📡 Chamando Cloud Function resetPassword...');
         }
 
-        final result = await callable.call({
-          'email': email,
-          'token': token,
-          'newPassword': newPassword,
-        }).timeout(
-          const Duration(seconds: 30),
-          onTimeout: () {
-            throw Exception('Tempo esgotado. Verifique sua conexão e tente novamente.');
-          },
-        );
+        final result = await callable
+            .call({'email': email, 'token': token, 'newPassword': newPassword})
+            .timeout(
+              const Duration(seconds: 30),
+              onTimeout: () {
+                throw Exception(
+                  'Tempo esgotado. Verifique sua conexão e tente novamente.',
+                );
+              },
+            );
 
         if (result.data['success'] == true) {
           if (kDebugMode) {
@@ -430,10 +452,11 @@ class AuthService {
       } on FirebaseFunctionsException catch (e) {
         // Trata erros específicos da Cloud Function
         String errorMessage = 'Erro ao redefinir senha';
-        
+
         switch (e.code) {
           case 'not-found':
-            errorMessage = 'Token invalido ou expirado. Por favor solicite um novo código.';
+            errorMessage =
+                'Token invalido ou expirado. Por favor solicite um novo código.';
             break;
           case 'permission-denied':
             errorMessage = 'Token já foi usado ou não corresponde ao email.';
@@ -442,25 +465,30 @@ class AuthService {
             errorMessage = 'Token expirado. Solicite um novo código.';
             break;
           case 'invalid-argument':
-            errorMessage = e.message ?? 'Dados inválidos. Verifique e tente novamente.';
+            errorMessage =
+                e.message ?? 'Dados inválidos. Verifique e tente novamente.';
             break;
           case 'unavailable':
-            errorMessage = 'Serviço temporariamente indisponível. Tente novamente em alguns instantes.';
+            errorMessage =
+                'Serviço temporariamente indisponível. Tente novamente em alguns instantes.';
             break;
           default:
-            errorMessage = e.message ?? 'Erro ao conectar ao servidor. Verifique sua conexão.';
+            errorMessage =
+                e.message ??
+                'Erro ao conectar ao servidor. Verifique sua conexão.';
         }
-        
+
         throw Exception(errorMessage);
       } catch (e) {
         // Se nenhuma solução está disponível
-        if (e.toString().contains('NOT_FOUND') || e.toString().contains('not found')) {
+        if (e.toString().contains('NOT_FOUND') ||
+            e.toString().contains('not found')) {
           throw Exception(
             'Serviço de reset não configurado.\n\n'
             'Opções:\n'
             '1. Configure Backend API (ver backend/README.md)\n'
             '2. OU faça deploy de Cloud Functions (ver GUIA_DEPLOY_CLOUD_FUNCTIONS.md)\n\n'
-            'Por enquanto, o email do Firebase foi enviado (verifique spam).'
+            'Por enquanto, o email do Firebase foi enviado (verifique spam).',
           );
         }
         rethrow;
@@ -481,7 +509,7 @@ class AuthService {
       if (_firebaseAuth.currentUser != null) {
         await _firebaseAuth.signOut();
       }
-      
+
       if (kDebugMode) {
         print('✓ Cache limpo');
       }
@@ -508,7 +536,6 @@ class AuthService {
     };
   }
 
-
   /// Força refresh do token
   Future<void> refreshToken() async {
     try {
@@ -528,7 +555,7 @@ class AuthService {
     try {
       final user = currentUser;
       if (user == null) return null;
-      
+
       return await user.getIdToken();
     } catch (e) {
       if (kDebugMode) {
@@ -568,16 +595,19 @@ class AuthService {
       return true;
     } on FirebaseAuthException catch (e) {
       if (kDebugMode) {
-        print('✗ Erro ao enviar email de verificação: ${e.code} - ${e.message}');
+        print(
+          '✗ Erro ao enviar email de verificação: ${e.code} - ${e.message}',
+        );
       }
-      
+
       String errorMessage = 'Erro ao enviar email de verificação';
       if (e.code == 'too-many-requests') {
-        errorMessage = 'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
+        errorMessage =
+            'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
       } else if (e.code == 'user-not-found') {
         errorMessage = 'Usuário não encontrado';
       }
-      
+
       throw Exception(errorMessage);
     } catch (e) {
       if (kDebugMode) {
@@ -593,7 +623,7 @@ class AuthService {
       final user = currentUser;
       if (user != null) {
         await user.reload();
-        
+
         if (kDebugMode) {
           print('✓ Dados do usuário recarregados');
           print('  Email verificado: ${user.emailVerified}');
@@ -613,10 +643,7 @@ class AuthService {
   }
 
   /// Atualiza o perfil do usuário (nome e foto)
-  Future<bool> updateProfile({
-    String? displayName,
-    String? photoURL,
-  }) async {
+  Future<bool> updateProfile({String? displayName, String? photoURL}) async {
     try {
       final user = currentUser;
       if (user == null) {
@@ -625,12 +652,12 @@ class AuthService {
 
       // Atualiza no Firebase Auth
       bool updated = false;
-      
+
       if (displayName != null && displayName != user.displayName) {
         await user.updateDisplayName(displayName);
         await user.reload(); // Recarrega para obter dados atualizados
         updated = true;
-        
+
         if (kDebugMode) {
           print('✓ Nome atualizado: $displayName');
         }
@@ -640,7 +667,7 @@ class AuthService {
         await user.updatePhotoURL(photoURL);
         await user.reload(); // Recarrega para obter dados atualizados
         updated = true;
-        
+
         if (kDebugMode) {
           print('✓ Foto de perfil atualizada: $photoURL');
         }
@@ -657,12 +684,13 @@ class AuthService {
       if (kDebugMode) {
         print('✗ Erro ao atualizar perfil: ${e.code} - ${e.message}');
       }
-      
+
       String errorMessage = 'Erro ao atualizar perfil';
       if (e.code == 'requires-recent-login') {
-        errorMessage = 'Por favor, faça login novamente para atualizar o perfil';
+        errorMessage =
+            'Por favor, faça login novamente para atualizar o perfil';
       }
-      
+
       throw Exception(errorMessage);
     } catch (e) {
       if (kDebugMode) {
@@ -689,20 +717,20 @@ class AuthService {
       // Nota: Esta verificação pode falhar mesmo se o usuário existir,
       // então não bloqueamos o envio do email se a verificação falhar
       bool userExists = false;
-      
+
       if (kDebugMode) {
         print('🔍 Verificando se usuário existe: $email');
       }
-      
+
       try {
         final methods = await _firebaseAuth.fetchSignInMethodsForEmail(email);
-        
+
         if (kDebugMode) {
           print('   Métodos de login encontrados: $methods');
         }
-        
+
         userExists = methods.isNotEmpty;
-        
+
         if (!userExists) {
           if (kDebugMode) {
             print('⚠ Aviso: fetchSignInMethodsForEmail retornou vazio');
@@ -712,7 +740,9 @@ class AuthService {
         }
       } on FirebaseAuthException catch (e) {
         if (kDebugMode) {
-          print('⚠ Erro ao verificar usuário (não bloqueante): ${e.code} - ${e.message}');
+          print(
+            '⚠ Erro ao verificar usuário (não bloqueante): ${e.code} - ${e.message}',
+          );
           print('💡 Continuando com o envio do email...');
         }
         // Não bloqueia o envio se a verificação falhar
@@ -724,15 +754,19 @@ class AuthService {
         }
         userExists = false;
       }
-      
+
       // Se a verificação indicar que o usuário não existe, apenas logamos
       // mas não bloqueamos o envio, pois fetchSignInMethodsForEmail pode falhar
       // mesmo quando o usuário existe (problema conhecido do Firebase)
       if (!userExists) {
         if (kDebugMode) {
-          print('💡 Nota: fetchSignInMethodsForEmail pode retornar vazio mesmo se o usuário existir');
+          print(
+            '💡 Nota: fetchSignInMethodsForEmail pode retornar vazio mesmo se o usuário existir',
+          );
           print('💡 Continuando com o envio do email via EmailJS...');
-          print('💡 Se o email não chegar, verifique no console do Firebase se o usuário existe');
+          print(
+            '💡 Se o email não chegar, verifique no console do Firebase se o usuário existe',
+          );
         }
       }
 
@@ -740,7 +774,10 @@ class AuthService {
       final token = await _tokenService.createPasswordResetToken(email);
 
       // Envia email via EmailJS
-      final emailSent = await _tokenService.sendPasswordResetEmail(email, token.token);
+      final emailSent = await _tokenService.sendPasswordResetEmail(
+        email,
+        token.token,
+      );
 
       if (emailSent) {
         if (kDebugMode) {
@@ -749,13 +786,17 @@ class AuthService {
         }
         return true;
       } else {
-        throw Exception('Falha ao enviar email. Verifique a configuração do EmailJS.');
+        throw Exception(
+          'Falha ao enviar email. Verifique a configuração do EmailJS.',
+        );
       }
     } on FirebaseAuthException catch (e) {
       if (kDebugMode) {
-        print('✗ Erro ao enviar email de recuperação: ${e.code} - ${e.message}');
+        print(
+          '✗ Erro ao enviar email de recuperação: ${e.code} - ${e.message}',
+        );
       }
-      
+
       String errorMessage = 'Erro ao enviar email de recuperação';
       if (e.code == 'user-not-found') {
         errorMessage = 'Nenhuma conta encontrada com este email';
@@ -764,11 +805,45 @@ class AuthService {
       } else if (e.code == 'too-many-requests') {
         errorMessage = 'Muitas tentativas. Tente novamente mais tarde.';
       }
-      
+
       throw Exception(errorMessage);
     } catch (e) {
       if (kDebugMode) {
         print('✗ Erro ao enviar email de recuperação: $e');
+      }
+      rethrow;
+    }
+  }
+
+  // ===========================================================================
+  // EXCLUSÃO DE CONTA (DIREITO AO ESQUECIMENTO LGPD)
+  // ===========================================================================
+
+  /// Exclui completamente a conta do usuário e todos os seus dados
+  ///
+  /// Implementa o direito ao esquecimento (LGPD) e remove:
+  /// - Dados do Firestore (usuário, consentimentos, veículos, caronas, etc.)
+  /// - Arquivos do Storage (fotos de perfil, documentos, etc.)
+  /// - Conta do Firebase Auth
+  ///
+  /// IMPORTANTE: Esta operação é irreversível!
+  ///
+  /// Retorna true se a exclusão foi bem-sucedida, false caso contrário
+  Future<bool> deleteAccount() async {
+    try {
+      final user = currentUser;
+      if (user == null) {
+        throw Exception('Usuário não autenticado');
+      }
+
+      // Importa o serviço de exclusão de conta
+      final accountDeletionService = AccountDeletionService();
+
+      // Executa a exclusão completa
+      return await accountDeletionService.deleteAccount(user.uid);
+    } catch (e) {
+      if (kDebugMode) {
+        print('✗ Erro ao excluir conta: $e');
       }
       rethrow;
     }

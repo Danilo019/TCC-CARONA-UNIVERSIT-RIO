@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import '../models/auth_token.dart';
-import 'firestore_service.dart';
 import 'email_service.dart';
 
 class TokenService {
@@ -10,66 +10,88 @@ class TokenService {
   factory TokenService() => _instance;
   TokenService._internal();
 
-  final FirestoreService _firestoreService = FirestoreService();
   final EmailService _emailService = EmailService();
-
-  /// Gera um token único de 6 dígitos
-  String _generateToken() {
-    final random = Random();
-    return (100000 + random.nextInt(900000)).toString();
-  }
+  final FirebaseFunctions _functions = FirebaseFunctions.instance;
 
   /// Valida se o email é da UDF
   bool _isValidUDFEmail(String email) {
     return email.endsWith('@cs.udf.edu.br');
   }
 
-  /// Cria um novo token de ativação
-  Future<AuthToken> createActivationToken(String email) async {
+  Future<AuthToken> _issueToken({
+    required String email,
+    required String purpose,
+  }) async {
     try {
-      // Valida o email
       if (!_isValidUDFEmail(email)) {
         throw Exception('Apenas emails @cs.udf.edu.br são permitidos');
       }
 
-      // Gera token único
-      String token;
-      bool isUnique = false;
-      int attempts = 0;
-      const maxAttempts = 10;
+      final callable = _functions.httpsCallable('issueActivationToken');
+      final result = await callable
+          .call({'email': email, 'purpose': purpose})
+          .timeout(
+            const Duration(seconds: 30),
+            onTimeout: () {
+              throw Exception(
+                'Tempo esgotado ao gerar token. Verifique sua conexão e tente novamente.',
+              );
+            },
+          );
 
-      do {
-        token = _generateToken();
-        attempts++;
-        
-        // Verifica se o token já existe no Firestore
-        final existingToken = await _firestoreService.getActivationToken(token);
-        isUnique = existingToken == null;
-        
-        if (attempts >= maxAttempts) {
-          throw Exception('Não foi possível gerar um token único após $maxAttempts tentativas');
-        }
-      } while (!isUnique);
-
-      // Cria o token com expiração de 30 minutos
-      final now = DateTime.now();
-      final expiresAt = now.add(const Duration(minutes: 30));
-
-      final authToken = AuthToken(
-        token: token,
-        email: email,
-        createdAt: now,
-        expiresAt: expiresAt,
-      );
-
-      // Salva no Firestore
-      await _firestoreService.saveActivationToken(authToken);
-
-      if (kDebugMode) {
-        print('✓ Token criado: $token para $email (expira em: $expiresAt)');
+      final rawData = result.data;
+      if (rawData is! Map) {
+        throw Exception('Resposta inválida da Cloud Function ao gerar token.');
       }
 
-      return authToken;
+      final data = Map<String, dynamic>.from(rawData);
+      final createdAtMillis = (data['createdAt'] as num?)?.toInt();
+      final expiresAtMillis = (data['expiresAt'] as num?)?.toInt();
+
+      if (createdAtMillis == null || expiresAtMillis == null) {
+        throw Exception(
+          'Resposta incompleta da Cloud Function ao gerar token.',
+        );
+      }
+
+      return AuthToken(
+        token: data['token'] as String? ?? '',
+        email: data['email'] as String? ?? email,
+        createdAt: DateTime.fromMillisecondsSinceEpoch(createdAtMillis),
+        expiresAt: DateTime.fromMillisecondsSinceEpoch(expiresAtMillis),
+        isUsed: data['isUsed'] as bool? ?? false,
+        userId: data['userId'] as String?,
+      );
+    } on FirebaseFunctionsException catch (e) {
+      if (kDebugMode) {
+        print(
+          '✗ Erro na Cloud Function issueActivationToken: ${e.code} - ${e.message}',
+        );
+      }
+
+      if (e.code == 'unimplemented' ||
+          e.code == 'internal' ||
+          e.code == 'unavailable') {
+        throw Exception(
+          e.message ??
+              'Cloud Function não disponível. Verifique o deploy do backend.',
+        );
+      }
+
+      throw Exception(e.message ?? 'Erro ao gerar token. Tente novamente.');
+    }
+  }
+
+  /// Cria um novo token de ativação
+  Future<AuthToken> createActivationToken(String email) async {
+    try {
+      final token = await _issueToken(email: email, purpose: 'activation');
+
+      if (kDebugMode) {
+        print('✓ Token criado via Cloud Function: ${token.token} para $email');
+      }
+
+      return token;
     } catch (e) {
       if (kDebugMode) {
         print('✗ Erro ao criar token: $e');
@@ -80,64 +102,80 @@ class TokenService {
 
   /// Valida um token de ativação (sem marcar como usado)
   /// Use este método para validação inicial antes de navegar para tela de reset
-  Future<bool> validateToken(String token, String email) async {
+  Future<bool> validateToken(
+    String token,
+    String email, {
+    bool markAsUsed = false,
+  }) async {
     try {
-      // Valida sem marcar como usado (será marcado quando o reset for bem-sucedido)
-      final isValid = await _firestoreService.validateTokenOnly(token, email);
-      
+      final callable = _functions.httpsCallable('validateActivationToken');
+      final result = await callable
+          .call({'token': token, 'email': email, 'markAsUsed': markAsUsed})
+          .timeout(
+            const Duration(seconds: 30),
+            onTimeout: () {
+              throw Exception(
+                'Tempo esgotado ao validar token. Verifique sua conexão e tente novamente.',
+              );
+            },
+          );
+
+      final rawData = result.data;
+      if (rawData is! Map) {
+        throw Exception(
+          'Resposta inválida da Cloud Function ao validar token.',
+        );
+      }
+
+      final data = Map<String, dynamic>.from(rawData);
+      final isValid = data['isValid'] == true;
+
       if (kDebugMode && isValid) {
-        print('✓ Token validado com sucesso (aguardando reset): $token');
+        print('✓ Token validado com sucesso via Cloud Function: $token');
       }
-      
+
       return isValid;
+    } on FirebaseFunctionsException catch (e) {
+      if (kDebugMode) {
+        print(
+          '✗ Erro na Cloud Function validateActivationToken: ${e.code} - ${e.message}',
+        );
+      }
+
+      // Erros esperados de validação retornam false
+      if (e.code == 'not-found' ||
+          e.code == 'permission-denied' ||
+          e.code == 'deadline-exceeded' ||
+          e.code == 'invalid-argument') {
+        return false;
+      }
+
+      // Função não configurada ou indisponível - repassa erro para UI orientar setup
+      if (e.code == 'unimplemented' ||
+          e.code == 'internal' ||
+          e.code == 'unavailable') {
+        throw Exception(
+          e.message ??
+              'Cloud Function não disponível. Verifique o deploy do backend.',
+        );
+      }
+
+      throw Exception(e.message ?? 'Erro ao validar token. Tente novamente.');
     } catch (e) {
       if (kDebugMode) {
-        print('✗ Erro ao validar token: $e');
+        print('✗ Erro genérico ao validar token: $e');
       }
-      return false;
+      rethrow;
     }
   }
 
-  /// Marca um token como usado (para ser chamado após reset bem-sucedido)
-  /// O backend já marca como usado, mas este método serve como backup
-  Future<void> markTokenAsUsed(String token) async {
+  /// Invalida um token marcando-o como usado
+  Future<void> invalidateToken(String token, String email) async {
     try {
-      final doc = await _firestoreService.getActivationToken(token);
-      if (doc != null && !doc.isUsed) {
-        // Usa o método validateAndUseToken para marcar como usado
-        // Isso garante que a marcação seja feita corretamente
-        await _firestoreService.validateAndUseToken(token, doc.email);
-        if (kDebugMode) {
-          print('✓ Token marcado como usado (backup): $token');
-        }
-      }
+      await validateToken(token, email, markAsUsed: true);
     } catch (e) {
       if (kDebugMode) {
-        print('⚠ Erro ao marcar token como usado: $e');
-      }
-      // Não lança exceção - o backend já marca como usado
-    }
-  }
-
-  /// Obtém informações de um token
-  Future<AuthToken?> getToken(String token) async {
-    try {
-      return await _firestoreService.getActivationToken(token);
-    } catch (e) {
-      if (kDebugMode) {
-        print('✗ Erro ao buscar token: $e');
-      }
-      return null;
-    }
-  }
-
-  /// Remove tokens expirados
-  Future<void> cleanExpiredTokens() async {
-    try {
-      await _firestoreService.cleanExpiredTokens();
-    } catch (e) {
-      if (kDebugMode) {
-        print('✗ Erro ao limpar tokens expirados: $e');
+        print('⚠ Não foi possível invalidar o token $token: $e');
       }
     }
   }
@@ -164,8 +202,12 @@ class TokenService {
         }
       } else {
         if (kDebugMode) {
-          print('⚠ Email não foi enviado. Verifique a configuração do EmailService.');
-          print('💡 Configure EmailJS, Resend ou Mailgun em lib/services/email_service.dart');
+          print(
+            '⚠ Email não foi enviado. Verifique a configuração do EmailService.',
+          );
+          print(
+            '💡 Configure EmailJS, Resend ou Mailgun em lib/services/email_service.dart',
+          );
         }
       }
 
@@ -184,7 +226,9 @@ class TokenService {
       // Gera um token de sessão mais longo
       final random = Random();
       final sessionToken = base64Encode(
-        utf8.encode('${email}_${DateTime.now().millisecondsSinceEpoch}_${random.nextInt(10000)}')
+        utf8.encode(
+          '${email}_${DateTime.now().millisecondsSinceEpoch}_${random.nextInt(10000)}',
+        ),
       );
 
       if (kDebugMode) {
@@ -206,14 +250,14 @@ class TokenService {
       // Decodifica o token
       final decoded = utf8.decode(base64Decode(sessionToken));
       final parts = decoded.split('_');
-      
+
       if (parts.length < 3) {
         return false;
       }
 
       final email = parts[0];
       final timestamp = int.tryParse(parts[1]);
-      
+
       if (timestamp == null) {
         return false;
       }
@@ -262,49 +306,15 @@ class TokenService {
   /// Cria um token de reset de senha
   Future<AuthToken> createPasswordResetToken(String email) async {
     try {
-      // Valida o email
-      if (!_isValidUDFEmail(email)) {
-        throw Exception('Apenas emails @cs.udf.edu.br são permitidos');
-      }
-
-      // Gera token único
-      String token;
-      bool isUnique = false;
-      int attempts = 0;
-      const maxAttempts = 10;
-
-      do {
-        token = _generateToken();
-        attempts++;
-        
-        // Verifica se o token já existe no Firestore
-        final existingToken = await _firestoreService.getActivationToken(token);
-        isUnique = existingToken == null;
-        
-        if (attempts >= maxAttempts) {
-          throw Exception('Não foi possível gerar um token único após $maxAttempts tentativas');
-        }
-      } while (!isUnique);
-
-      // Cria o token com expiração de 30 minutos
-      final now = DateTime.now();
-      final expiresAt = now.add(const Duration(minutes: 30));
-
-      final authToken = AuthToken(
-        token: token,
-        email: email,
-        createdAt: now,
-        expiresAt: expiresAt,
-      );
-
-      // Salva no Firestore (pode usar o mesmo método de ativação)
-      await _firestoreService.saveActivationToken(authToken);
+      final token = await _issueToken(email: email, purpose: 'password_reset');
 
       if (kDebugMode) {
-        print('✓ Token de reset de senha criado: $token para $email (expira em: $expiresAt)');
+        print(
+          '✓ Token de reset de senha criado via Cloud Function: ${token.token} para $email',
+        );
       }
 
-      return authToken;
+      return token;
     } catch (e) {
       if (kDebugMode) {
         print('✗ Erro ao criar token de reset: $e');
@@ -342,8 +352,12 @@ class TokenService {
         }
       } else {
         if (kDebugMode) {
-          print('⚠ Email não foi enviado. Verifique a configuração do EmailService.');
-          print('💡 Configure EmailJS, Resend ou Mailgun em lib/services/email_service.dart');
+          print(
+            '⚠ Email não foi enviado. Verifique a configuração do EmailService.',
+          );
+          print(
+            '💡 Configure EmailJS, Resend ou Mailgun em lib/services/email_service.dart',
+          );
         }
       }
 
