@@ -652,10 +652,24 @@ class AuthService {
 
       // Atualiza no Firebase Auth
       bool updated = false;
+      bool shouldReload = false;
+
+      String? normalizedPhotoURL = photoURL;
+      final isDataUri = photoURL != null && photoURL.startsWith('data:image');
+      final exceedsLimit = photoURL != null && photoURL.length > 2048;
+      if (isDataUri || exceedsLimit) {
+        if (kDebugMode) {
+          print(
+            '⚠ Foto de perfil não atualizada no Firebase Auth (formato/tamanho inválido). '
+            'Ela será usada apenas via Firestore.',
+          );
+        }
+        normalizedPhotoURL = null;
+      }
 
       if (displayName != null && displayName != user.displayName) {
         await user.updateDisplayName(displayName);
-        await user.reload(); // Recarrega para obter dados atualizados
+        shouldReload = true;
         updated = true;
 
         if (kDebugMode) {
@@ -663,17 +677,35 @@ class AuthService {
         }
       }
 
-      if (photoURL != null && photoURL != user.photoURL) {
-        await user.updatePhotoURL(photoURL);
-        await user.reload(); // Recarrega para obter dados atualizados
+      final wantsRemovePhoto = photoURL == null;
+      if (wantsRemovePhoto && user.photoURL != null) {
+        await user.updatePhotoURL(null);
+        shouldReload = true;
         updated = true;
 
         if (kDebugMode) {
-          print('✓ Foto de perfil atualizada: $photoURL');
+          print('✓ Foto de perfil removida do Firebase Auth');
         }
+      } else if (normalizedPhotoURL != null &&
+          normalizedPhotoURL != user.photoURL) {
+        await user.updatePhotoURL(normalizedPhotoURL);
+        shouldReload = true;
+        updated = true;
+
+        if (kDebugMode) {
+          print('✓ Foto de perfil atualizada (Firebase Auth)');
+        }
+      } else if (photoURL != null && normalizedPhotoURL == null && kDebugMode) {
+        print(
+          '⚠ Foto de perfil ignorada no Firebase Auth (provavelmente Base64 ou muito grande).',
+        );
       }
 
       // Atualiza no Firestore também
+      if (shouldReload) {
+        await user.reload(); // Recarrega para obter dados atualizados
+      }
+
       if (updated) {
         final authUser = AuthUser.fromFirebaseUser(user);
         await _firestoreService.saveUser(authUser);

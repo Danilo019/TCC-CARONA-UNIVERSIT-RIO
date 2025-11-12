@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart' as app_auth;
 import '../services/auth_service.dart';
+import '../services/vehicle_service.dart';
+import '../models/vehicle.dart';
 
 /// Tela de perfil do usuário
 class ProfileScreen extends StatelessWidget {
@@ -547,9 +549,7 @@ class ProfileScreen extends StatelessWidget {
           _buildActionTile(
             icon: Icons.directions_car,
             label: 'Meus Veículos',
-            onTap: () {
-              Navigator.of(context).pushNamed('/vehicle-register');
-            },
+            onTap: () => _handleMyVehiclesTap(context),
           ),
           _buildDivider(),
           _buildActionTile(
@@ -610,6 +610,64 @@ class ProfileScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _handleMyVehiclesTap(BuildContext context) async {
+    final authProvider = Provider.of<app_auth.AuthProvider>(
+      context,
+      listen: false,
+    );
+    final user = authProvider.user;
+
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Faça login novamente para gerenciar seus veículos.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    Vehicle? existingVehicle;
+    String? errorMessage;
+
+    try {
+      existingVehicle = await VehicleService().getVehicleByDriver(user.uid);
+    } catch (error) {
+      errorMessage = 'Não foi possível carregar seus veículos. Tente novamente.';
+    } finally {
+      Navigator.of(context, rootNavigator: true).pop();
+    }
+
+    if (errorMessage != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMessage),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    if (existingVehicle == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Nenhum veículo cadastrado. Cadastre seu veículo agora.'),
+        ),
+      );
+    }
+
+    await Navigator.of(context).pushNamed(
+      '/vehicle-register',
+      arguments: existingVehicle,
     );
   }
 

@@ -18,6 +18,7 @@ class Ride {
   final String status; // 'active', 'in_progress', 'completed', 'cancelled'
   final DateTime createdAt;
   final DateTime? updatedAt;
+  final DateTime? startedAt;
   final GeoPoint? originGeoPoint;
   final String? originGeoHash;
 
@@ -37,6 +38,7 @@ class Ride {
     this.status = 'active',
     required this.createdAt,
     this.updatedAt,
+    this.startedAt,
     this.originGeoPoint,
     this.originGeoHash,
   });
@@ -84,6 +86,9 @@ class Ride {
         updatedAt: data['updatedAt'] != null 
             ? parseDateTime(data['updatedAt']) 
             : null,
+        startedAt: data['startedAt'] != null
+            ? parseDateTime(data['startedAt'])
+            : null,
         originGeoPoint: data['originGeoPoint'] is GeoPoint ? data['originGeoPoint'] as GeoPoint : null,
         originGeoHash: data['originGeoHash'] as String?,
       );
@@ -113,6 +118,7 @@ class Ride {
       'status': status,
       'createdAt': createdAt,
       'updatedAt': updatedAt,
+      'startedAt': startedAt,
       'originGeoPoint': originGeoPoint,
       'originGeoHash': originGeoHash,
       'isAvailable': status == 'active' && availableSeats > 0,
@@ -136,6 +142,7 @@ class Ride {
     String? status,
     DateTime? createdAt,
     DateTime? updatedAt,
+    DateTime? startedAt,
     GeoPoint? originGeoPoint,
     String? originGeoHash,
   }) {
@@ -155,6 +162,7 @@ class Ride {
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      startedAt: startedAt ?? this.startedAt,
       originGeoPoint: originGeoPoint ?? this.originGeoPoint,
       originGeoHash: originGeoHash ?? this.originGeoHash,
     );

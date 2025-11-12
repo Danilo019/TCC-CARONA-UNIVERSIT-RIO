@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -11,10 +12,7 @@ class GeocodingResult {
   final String formattedAddress;
   final Location location;
 
-  GeocodingResult({
-    required this.formattedAddress,
-    required this.location,
-  });
+  GeocodingResult({required this.formattedAddress, required this.location});
 }
 
 class Route {
@@ -33,10 +31,7 @@ class DistanceMatrixResult {
   final double distanceKm;
   final Duration duration;
 
-  DistanceMatrixResult({
-    required this.distanceKm,
-    required this.duration,
-  });
+  DistanceMatrixResult({required this.distanceKm, required this.duration});
 }
 
 /// Serviço para interagir com as APIs do Google Maps
@@ -59,9 +54,7 @@ class GoogleMapsService {
         '$_baseUrl/geocode/json?address=${Uri.encodeComponent(address)}&key=$_apiKey',
       );
 
-      final response = await http.get(url).timeout(
-        const Duration(seconds: 10),
-      );
+      final response = await http.get(url).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -106,9 +99,7 @@ class GoogleMapsService {
         '$_baseUrl/geocode/json?latlng=${location.latitude},${location.longitude}&key=$_apiKey',
       );
 
-      final response = await http.get(url).timeout(
-        const Duration(seconds: 10),
-      );
+      final response = await http.get(url).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -118,30 +109,32 @@ class GoogleMapsService {
 
           return GeocodingResult(
             formattedAddress: result['formatted_address'],
-            location: location.copyWith(
-              address: result['formatted_address'],
-            ),
+            location: location.copyWith(address: result['formatted_address']),
           );
         } else {
           // Fallback: retorna coordenadas sem endereço formatado
           if (kDebugMode) {
             final status = data['status'] as String;
             if (status == 'REQUEST_DENIED') {
-              print('⚠ Reverse Geocoding requer billing. Usando apenas coordenadas.');
+              print(
+                '⚠ Reverse Geocoding requer billing. Usando apenas coordenadas.',
+              );
             } else {
               print('✗ Reverse Geocoding falhou: $status');
             }
           }
           // Retorna localização com coordenadas (sem endereço formatado)
           return GeocodingResult(
-            formattedAddress: '${location.latitude.toStringAsFixed(6)}, ${location.longitude.toStringAsFixed(6)}',
+            formattedAddress:
+                '${location.latitude.toStringAsFixed(6)}, ${location.longitude.toStringAsFixed(6)}',
             location: location,
           );
         }
       } else {
         // Fallback: retorna coordenadas
         return GeocodingResult(
-          formattedAddress: '${location.latitude.toStringAsFixed(6)}, ${location.longitude.toStringAsFixed(6)}',
+          formattedAddress:
+              '${location.latitude.toStringAsFixed(6)}, ${location.longitude.toStringAsFixed(6)}',
           location: location,
         );
       }
@@ -151,7 +144,8 @@ class GoogleMapsService {
       }
       // Fallback: retorna coordenadas
       return GeocodingResult(
-        formattedAddress: '${location.latitude.toStringAsFixed(6)}, ${location.longitude.toStringAsFixed(6)}',
+        formattedAddress:
+            '${location.latitude.toStringAsFixed(6)}, ${location.longitude.toStringAsFixed(6)}',
         location: location,
       );
     }
@@ -186,12 +180,12 @@ class GoogleMapsService {
   }) async {
     try {
       final avoid = <String>[];
-      
+
       if (avoidHighways) avoid.add('highways');
       if (avoidTolls) avoid.add('tolls');
 
       final avoidParam = avoid.isNotEmpty ? '&avoid=${avoid.join('|')}' : '';
-      
+
       // Constrói parâmetro de waypoints
       String waypointsParam = '';
       if (waypoints != null && waypoints.isNotEmpty) {
@@ -200,7 +194,7 @@ class GoogleMapsService {
             .join('|');
         waypointsParam = '&waypoints=$waypointsStr';
       }
-      
+
       final url = Uri.parse(
         '$_baseUrl/directions/json?origin=${origin.latitude},${origin.longitude}'
         '&destination=${destination.latitude},${destination.longitude}'
@@ -210,9 +204,7 @@ class GoogleMapsService {
         '&key=$_apiKey',
       );
 
-      final response = await http.get(url).timeout(
-        const Duration(seconds: 15),
-      );
+      final response = await http.get(url).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -234,22 +226,23 @@ class GoogleMapsService {
 
           // Extrai waypoints da polyline (pontos da rota)
           final waypointsList = <Location>[];
-          
+
           // Adiciona origem
           waypointsList.add(origin);
-          
+
           // Adiciona pontos intermediários se houver
           if (waypoints != null && waypoints.isNotEmpty) {
             waypointsList.addAll(waypoints);
           }
-          
+
           // Adiciona destino
           waypointsList.add(destination);
-          
+
           // Tenta decodificar polyline para obter pontos da rota completa
           // Por enquanto, retornamos os waypoints principais
           if (route['overview_polyline'] != null) {
-            final encodedPolyline = route['overview_polyline']['points'] as String;
+            final encodedPolyline =
+                route['overview_polyline']['points'] as String;
             // Decodifica polyline (usando algoritmo simplificado)
             final decodedPoints = _decodePolyline(encodedPolyline);
             if (decodedPoints.isNotEmpty) {
@@ -268,19 +261,21 @@ class GoogleMapsService {
           if (kDebugMode) {
             print('✗ Directions falhou: ${data['status']}');
           }
-          
+
           // Se a API não está disponível (REQUEST_DENIED, etc), usa cálculo local
           final status = data['status'] as String;
-          if (status == 'REQUEST_DENIED' || 
+          if (status == 'REQUEST_DENIED' ||
               status == 'OVER_QUERY_LIMIT' ||
               status == 'ZERO_RESULTS' ||
               status == 'NOT_FOUND') {
             if (kDebugMode) {
-              print('⚠ API retornou: $status - usando cálculo local de rota como fallback');
+              print(
+                '⚠ API retornou: $status - usando cálculo local de rota como fallback',
+              );
             }
             return _calculateRouteLocal(origin, destination, waypoints);
           }
-          
+
           return null;
         }
       } else {
@@ -332,10 +327,7 @@ class GoogleMapsService {
       int deltaLng = ((result & 1) != 0) ? ~(result >> 1) : (result >> 1);
       lng += deltaLng;
 
-      points.add(Location(
-        latitude: lat / 1e5,
-        longitude: lng / 1e5,
-      ));
+      points.add(Location(latitude: lat / 1e5, longitude: lng / 1e5));
     }
 
     return points;
@@ -348,18 +340,18 @@ class GoogleMapsService {
     List<Location>? waypoints,
   ) {
     final waypointsList = <Location>[];
-    
+
     // Adiciona origem
     waypointsList.add(origin);
-    
+
     // Adiciona pontos intermediários se houver
     if (waypoints != null && waypoints.isNotEmpty) {
       waypointsList.addAll(waypoints);
     }
-    
+
     // Adiciona destino
     waypointsList.add(destination);
-    
+
     // Calcula distância total (linha reta entre pontos)
     double totalDistance = 0;
     for (int i = 0; i < waypointsList.length - 1; i++) {
@@ -371,19 +363,21 @@ class GoogleMapsService {
       );
       totalDistance += distance;
     }
-    
+
     // Estima tempo (assumindo velocidade média de 40 km/h considerando curvas e trânsito)
     // Multiplica por 1.3 para considerar que estradas não são linha reta
     final estimatedDistance = totalDistance * 1.3;
     final averageSpeed = 40.0; // km/h
     final hours = estimatedDistance / averageSpeed;
     final duration = Duration(seconds: (hours * 3600).round());
-    
+
     if (kDebugMode) {
-      print('✓ Rota calculada localmente: ${estimatedDistance.toStringAsFixed(2)} km (estimado)');
+      print(
+        '✓ Rota calculada localmente: ${estimatedDistance.toStringAsFixed(2)} km (estimado)',
+      );
       print('✓ Tempo estimado: ${duration.inMinutes} min');
     }
-    
+
     return Route(
       distanceKm: estimatedDistance,
       duration: duration,
@@ -405,7 +399,11 @@ class GoogleMapsService {
   }) async {
     // Tenta usar API do Google primeiro (se billing estiver configurado)
     try {
-      final result = await _getDistanceMatrixFromAPI(origin, destination, travelMode);
+      final result = await _getDistanceMatrixFromAPI(
+        origin,
+        destination,
+        travelMode,
+      );
       if (result != null) {
         return result;
       }
@@ -433,16 +431,14 @@ class GoogleMapsService {
         '&key=$_apiKey',
       );
 
-      final response = await http.get(url).timeout(
-        const Duration(seconds: 10),
-      );
+      final response = await http.get(url).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
 
         if (data['status'] == 'OK' && data['rows'].isNotEmpty) {
           final row = data['rows'][0];
-          
+
           if (row['elements'].isNotEmpty) {
             final element = row['elements'][0];
 
@@ -506,19 +502,16 @@ class GoogleMapsService {
 
     // Calcula tempo estimado: tempo = distância / velocidade
     final hours = distanceKm / averageSpeed;
-    final duration = Duration(
-      seconds: (hours * 3600).round(),
-    );
+    final duration = Duration(seconds: (hours * 3600).round());
 
     if (kDebugMode) {
-      print('✓ Distância calculada localmente: ${distanceKm.toStringAsFixed(2)} km');
+      print(
+        '✓ Distância calculada localmente: ${distanceKm.toStringAsFixed(2)} km',
+      );
       print('✓ Tempo estimado: ${duration.inMinutes} min (modo: $travelMode)');
     }
 
-    return DistanceMatrixResult(
-      distanceKm: distanceKm,
-      duration: duration,
-    );
+    return DistanceMatrixResult(distanceKm: distanceKm, duration: duration);
   }
 
   /// Calcula distâncias de múltiplas origens para múltiplos destinos
@@ -531,7 +524,8 @@ class GoogleMapsService {
 
     for (final origin in origins) {
       for (final destination in destinations) {
-        final key = '${origin.latitude},${origin.longitude}_${destination.latitude},${destination.longitude}';
+        final key =
+            '${origin.latitude},${origin.longitude}_${destination.latitude},${destination.longitude}';
         results[key] = await getDistanceMatrix(
           origin: origin,
           destination: destination,
@@ -559,7 +553,8 @@ class GoogleMapsService {
         travelMode: travelMode,
       );
 
-      if (result != null && (minDistance == null || result.distanceKm < minDistance)) {
+      if (result != null &&
+          (minDistance == null || result.distanceKm < minDistance)) {
         minDistance = result.distanceKm;
         nearest = destination;
       }
@@ -582,40 +577,75 @@ class GoogleMapsService {
       // Formata coordenadas para URL do Google Maps
       final originStr = '${origin.latitude},${origin.longitude}';
       final destinationStr = '${destination.latitude},${destination.longitude}';
-      
-      // URL para navegação no Google Maps
-      // Usa com.google.android.apps.maps para Android e maps.apple.com para iOS
-      final url = Uri.parse(
-        'https://www.google.com/maps/dir/?api=1&origin=$originStr&destination=$destinationStr&travelmode=driving',
-      );
+
+      Uri? deepLink;
+      late final Uri fallbackUrl;
+
+      if (Platform.isAndroid) {
+        // Abre diretamente o modo navegação turn-by-turn
+        deepLink = Uri.parse('google.navigation:q=$destinationStr&mode=d');
+        fallbackUrl = Uri.parse(
+          'https://www.google.com/maps/dir/?api=1'
+          '&origin=$originStr&destination=$destinationStr&travelmode=driving',
+        );
+      } else if (Platform.isIOS) {
+        // Precisa do esquema do Google Maps (se instalado); fallback para Apple Maps
+        deepLink = Uri.parse(
+          'comgooglemaps://?saddr=$originStr&daddr=$destinationStr&directionsmode=driving',
+        );
+        fallbackUrl = Uri.parse(
+          'https://maps.apple.com/?saddr=$originStr&daddr=$destinationStr&dirflg=d',
+        );
+      } else {
+        fallbackUrl = Uri.parse(
+          'https://www.google.com/maps/dir/?api=1'
+          '&origin=$originStr&destination=$destinationStr&travelmode=driving',
+        );
+      }
 
       if (kDebugMode) {
-        print('🧭 Abrindo navegação do Google Maps...');
+        print('🧭 Abrindo navegação...');
         print('  Origem: $originStr');
         print('  Destino: $destinationStr');
       }
 
-      if (await canLaunchUrl(url)) {
-        final launched = await launchUrl(
-          url,
-          mode: LaunchMode.externalApplication,
-        );
-        
-        if (kDebugMode) {
-          if (launched) {
-            print('✓ Navegação aberta com sucesso');
-          } else {
-            print('✗ Não foi possível abrir navegação');
+      Future<bool> tryLaunch(Uri uri, {bool enableJs = false}) async {
+        try {
+          final launched = await launchUrl(
+            uri,
+            mode: LaunchMode.externalApplication,
+            webViewConfiguration: enableJs
+                ? const WebViewConfiguration(enableJavaScript: true)
+                : const WebViewConfiguration(),
+          );
+          if (kDebugMode) {
+            if (launched) {
+              print('✓ Navegação aberta com $uri');
+            } else {
+              print('✗ Falha ao abrir navegação: $uri');
+            }
           }
+          return launched;
+        } catch (e) {
+          if (kDebugMode) {
+            print('✗ Erro ao tentar abrir $uri: $e');
+          }
+          return false;
         }
-        
-        return launched;
-      } else {
-        if (kDebugMode) {
-          print('✗ Não é possível abrir URL: $url');
-        }
-        return false;
       }
+
+      if (deepLink != null && await tryLaunch(deepLink)) {
+        return true;
+      }
+
+      if (await tryLaunch(fallbackUrl, enableJs: true)) {
+        return true;
+      }
+
+      if (kDebugMode) {
+        print('✗ Nenhuma URL de navegação disponível');
+      }
+      return false;
     } catch (e) {
       if (kDebugMode) {
         print('✗ Erro ao abrir navegação: $e');
@@ -623,5 +653,69 @@ class GoogleMapsService {
       return false;
     }
   }
-}
 
+  /// Abre navegação no Waze utilizando apenas o destino
+  Future<bool> launchWazeNavigation({required Location destination}) async {
+    try {
+      final destinationStr = '${destination.latitude},${destination.longitude}';
+
+      final Uri wazeUri = Uri.parse('waze://?ll=$destinationStr&navigate=yes');
+
+      Future<bool> tryLaunch(Uri uri) async {
+        try {
+          final launched = await launchUrl(
+            uri,
+            mode: LaunchMode.externalApplication,
+          );
+          if (kDebugMode) {
+            if (launched) {
+              print('✓ Navegação aberta no Waze com $uri');
+            } else {
+              print('✗ Falha ao abrir Waze: $uri');
+            }
+          }
+          return launched;
+        } catch (e) {
+          if (kDebugMode) {
+            print('✗ Erro ao tentar abrir Waze com $uri: $e');
+          }
+          return false;
+        }
+      }
+
+      if (await tryLaunch(wazeUri)) {
+        return true;
+      }
+
+      Uri? storeUri;
+
+      if (Platform.isAndroid) {
+        storeUri = Uri.parse('market://details?id=com.waze');
+      } else if (Platform.isIOS) {
+        storeUri = Uri.parse('itms-apps://itunes.apple.com/app/id323229106');
+      }
+
+      if (storeUri != null && await tryLaunch(storeUri)) {
+        return true;
+      }
+
+      final fallbackStore = Uri.parse(
+        'https://www.waze.com/ul?ll=$destinationStr&navigate=yes',
+      );
+
+      if (await tryLaunch(fallbackStore)) {
+        return true;
+      }
+
+      if (kDebugMode) {
+        print('✗ Nenhuma URL válida para Waze');
+      }
+      return false;
+    } catch (e) {
+      if (kDebugMode) {
+        print('✗ Erro ao abrir Waze: $e');
+      }
+      return false;
+    }
+  }
+}

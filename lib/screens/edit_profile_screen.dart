@@ -16,6 +16,8 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
+  static const int _maxImageSizeInBytes = 5 * 1024 * 1024; // 5MB
+
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final AuthService _authService = AuthService();
@@ -62,8 +64,29 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       );
 
       if (image != null) {
+        final pickedFile = File(image.path);
+        final length = await pickedFile.length();
+
+        if (length == 0) {
+          throw Exception('Arquivo de imagem vazio.');
+        }
+
+        if (length > _maxImageSizeInBytes) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text(
+                  'Imagem muito grande. Escolha um arquivo de até 5MB.',
+                ),
+                backgroundColor: Colors.orange[700],
+              ),
+            );
+          }
+          return;
+        }
+
         setState(() {
-          _selectedImage = File(image.path);
+          _selectedImage = pickedFile;
         });
       }
     } catch (e) {
@@ -160,7 +183,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
         // Deleta foto antiga se existir
         if (_currentPhotoURL != null) {
-          await _storageService.deleteProfilePhoto(user.uid);
+          try {
+            await _storageService.deleteProfilePhoto(user.uid);
+          } catch (error) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Não foi possível remover a foto antiga. Usaremos a nova imagem mesmo assim.',
+                  ),
+                  backgroundColor: Colors.orange[700],
+                ),
+              );
+            }
+          }
         }
 
         // Faz upload da nova foto
@@ -181,9 +217,25 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       }
 
       // Verifica se deve remover foto
-      if (_selectedImage == null && _currentPhotoURL == null && user.photoURL != null) {
+      final removeCurrentPhoto =
+          _selectedImage == null && _currentPhotoURL == null && user.photoURL != null;
+
+      if (removeCurrentPhoto) {
         // Usuário removeu a foto
-        await _storageService.deleteProfilePhoto(user.uid);
+        try {
+          await _storageService.deleteProfilePhoto(user.uid);
+        } catch (error) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Não foi possível remover a foto atual. Tente novamente mais tarde.',
+                ),
+                backgroundColor: Colors.orange[700],
+              ),
+            );
+          }
+        }
         newPhotoURL = null;
       }
 
@@ -216,10 +268,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         uid: user.uid,
         displayName: nameChanged ? newDisplayName : null,
         photoURL: photoChanged ? newPhotoURL : null,
+        removePhoto: photoChanged && newPhotoURL == null,
       );
 
       // Recarrega dados do usuário no provider
       await authProvider.refreshUser();
+
+      if (photoChanged) {
+        setState(() {
+          _currentPhotoURL = newPhotoURL;
+          _selectedImage = null;
+        });
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -240,7 +300,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
         // Volta para a tela anterior após um breve delay
         await Future.delayed(const Duration(milliseconds: 500));
-        Navigator.pop(context);
+        Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {

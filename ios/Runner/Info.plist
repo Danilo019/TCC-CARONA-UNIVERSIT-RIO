@@ -62,6 +62,8 @@
 	<array>
 		<string>msauthv2</string>
 		<string>msauthv3</string>
+		<string>waze</string>
+		<string>comgooglemaps</string>
 	</array>
 	
 	<!-- Permissões para câmera e galeria (image_picker) -->

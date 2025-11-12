@@ -1,18 +1,25 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
-import '../providers/auth_provider.dart';
+import 'package:provider/provider.dart';
+import '../components/address_autocomplete.dart';
+import '../components/map_widget.dart';
+import '../config/maps_config.dart';
+import '../models/location.dart';
 import '../models/ride.dart';
 import '../models/ride_request.dart';
-import '../models/location.dart';
-import '../services/rides_service.dart';
-import '../services/ride_request_service.dart';
+import '../models/vehicle_validation_status.dart';
+import '../providers/auth_provider.dart';
 import '../services/google_maps_service.dart';
+import '../services/location_service.dart';
 import '../services/nominatim_service.dart';
-import '../components/map_widget.dart';
-import '../components/address_autocomplete.dart';
 import '../services/notification_service.dart';
+import '../services/ride_request_service.dart';
+import '../services/rides_service.dart';
+import '../services/vehicle_service.dart';
 
 /// Tela para oferecer uma nova carona e gerenciar caronas existentes
 class OfferRideScreen extends StatefulWidget {
@@ -22,12 +29,15 @@ class OfferRideScreen extends StatefulWidget {
   State<OfferRideScreen> createState() => _OfferRideScreenState();
 }
 
+enum RideDirection { toCampus, fromCampus }
+
 class _OfferRideScreenState extends State<OfferRideScreen>
     with SingleTickerProviderStateMixin {
   final RidesService _ridesService = RidesService();
   final RideRequestService _requestService = RideRequestService();
   final GoogleMapsService _googleMapsService = GoogleMapsService();
   final NotificationService _notificationService = NotificationService();
+  final VehicleService _vehicleService = VehicleService();
 
   late TabController _tabController;
 
@@ -46,10 +56,20 @@ class _OfferRideScreenState extends State<OfferRideScreen>
   DateTime? _selectedDateTime;
   int _maxSeats = 4;
   int _availableSeats = 4;
+  static const int _startRideLeadTimeMinutes = 15;
+  static const double _campusDistanceToleranceKm = 0.2;
   bool _isLoading = false;
   bool _isLoadingLocation = false;
   bool _isLoadingRoute = false;
   String? _errorMessage;
+
+  RideDirection _rideDirection = RideDirection.toCampus;
+
+  Location get _campusLocation => MapsConfig.udfCampusLocation;
+
+  bool get _isOriginLocked => _rideDirection == RideDirection.fromCampus;
+
+  bool get _isDestinationLocked => _rideDirection == RideDirection.toCampus;
 
   // Estados do gerenciamento de caronas
   List<Ride> _myRides = [];
@@ -67,6 +87,7 @@ class _OfferRideScreenState extends State<OfferRideScreen>
         _loadMyRides();
       }
     });
+    _applyRideDirection(_rideDirection, shouldNotify: false);
     _loadCurrentLocation();
   }
 
@@ -87,237 +108,149 @@ class _OfferRideScreenState extends State<OfferRideScreen>
     });
   }
 
-  /// Busca endereço para origem
-  Future<void> _searchOrigin() async {
-    // Pergunta se quer buscar por texto ou no mapa
-    final choice = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Selecionar Origem'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.search),
-              title: const Text('Buscar por texto'),
-              onTap: () => Navigator.pop(context, 'text'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.map),
-              title: const Text('Selecionar no mapa'),
-              onTap: () => Navigator.pop(context, 'map'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-        ],
-      ),
-    );
+  void _applyRideDirection(
+    RideDirection direction, {
+    bool shouldNotify = true,
+  }) {
+    final campus = _campusLocation;
+    void updater() {
+      _rideDirection = direction;
+      _errorMessage = null;
+      _routePoints = null;
+      _pickupPoints.clear();
 
-    if (choice == 'text' && mounted) {
-      // Busca por texto
-      final result = await showDialog<GeocodingResult>(
-        context: context,
-        builder: (context) => _SearchAddressDialog(title: 'Origem'),
-      );
+      final isDestinationLocked = direction == RideDirection.toCampus;
+      final isOriginLocked = direction == RideDirection.fromCampus;
 
-      if (result != null && mounted) {
-        setState(() {
-          _originLocation = result.location;
-          _originController.text = result.formattedAddress;
-        });
+      if (isDestinationLocked) {
+        _destinationLocation = campus;
+        _destinationController.text = campus.address ?? 'Campus UDF';
+      } else if (_destinationLocation != null &&
+          _destinationLocation == campus) {
+        _destinationLocation = null;
+        _destinationController.clear();
       }
-    } else if (choice == 'map' && mounted) {
-      // Seleciona no mapa
-      await _showMapPicker('Origem');
+
+      if (isOriginLocked) {
+        _originLocation = campus;
+        _originController.text = campus.address ?? 'Campus UDF';
+      } else if (_originLocation != null && _originLocation == campus) {
+        _originLocation = null;
+        _originController.clear();
+      }
+    }
+
+    if (shouldNotify) {
+      setState(updater);
+    } else {
+      updater();
     }
   }
 
-  /// Busca endereço para destino
-  Future<void> _searchDestination() async {
-    // Pergunta se quer buscar por texto ou no mapa
-    final choice = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Selecionar Destino'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.search),
-              title: const Text('Buscar por texto'),
-              onTap: () => Navigator.pop(context, 'text'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.map),
-              title: const Text('Selecionar no mapa'),
-              onTap: () => Navigator.pop(context, 'map'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-        ],
-      ),
+  /// Atualiza estado com localização selecionada (texto ou mapa)
+  void _applyLocationSelection({
+    required bool isOrigin,
+    required GeocodingResult result,
+  }) {
+    if ((isOrigin && _isOriginLocked) || (!isOrigin && _isDestinationLocked)) {
+      return;
+    }
+
+    final updatedLocation = result.location.copyWith(
+      address: result.formattedAddress,
     );
 
-    if (choice == 'text' && mounted) {
-      // Busca por texto
-      final result = await showDialog<GeocodingResult>(
-        context: context,
-        builder: (context) => _SearchAddressDialog(title: 'Destino'),
-      );
-
-      if (result != null && mounted) {
-        setState(() {
-          _destinationLocation = result.location;
-          _destinationController.text = result.formattedAddress;
-        });
+    setState(() {
+      if (isOrigin) {
+        _originLocation = updatedLocation;
+        _originController.text = result.formattedAddress;
+      } else {
+        _destinationLocation = updatedLocation;
+        _destinationController.text = result.formattedAddress;
       }
-    } else if (choice == 'map' && mounted) {
-      // Seleciona no mapa
-      await _showMapPicker('Destino');
+
+      // Sempre que origem ou destino mudarem, invalidamos rota e pontos anteriores
+      _routePoints = null;
+      _pickupPoints.clear();
+      _errorMessage = null;
+    });
+  }
+
+  /// Limpa seleção quando usuário altera o texto manualmente
+  void _handleLocationEdition({required bool isOrigin}) {
+    if ((isOrigin && _isOriginLocked) || (!isOrigin && _isDestinationLocked)) {
+      return;
+    }
+
+    final hasLocation = isOrigin
+        ? _originLocation != null
+        : _destinationLocation != null;
+
+    if (!hasLocation) {
+      return;
+    }
+
+    setState(() {
+      if (isOrigin) {
+        _originLocation = null;
+      } else {
+        _destinationLocation = null;
+      }
+      _routePoints = null;
+      _pickupPoints.clear();
+    });
+  }
+
+  /// Limpa completamente a seleção e o campo associado
+  void _clearLocation({required bool isOrigin}) {
+    if ((isOrigin && _isOriginLocked) || (!isOrigin && _isDestinationLocked)) {
+      return;
+    }
+
+    setState(() {
+      if (isOrigin) {
+        _originLocation = null;
+        _originController.clear();
+      } else {
+        _destinationLocation = null;
+        _destinationController.clear();
+      }
+      _routePoints = null;
+      _pickupPoints.clear();
+    });
+  }
+
+  /// Abre seletor no mapa e aplica resultado
+  Future<void> _handleMapSelection({required bool isOrigin}) async {
+    if ((isOrigin && _isOriginLocked) || (!isOrigin && _isDestinationLocked)) {
+      return;
+    }
+
+    final title = isOrigin ? 'Origem' : 'Destino';
+    final initialLocation = isOrigin
+        ? _originLocation ?? _destinationLocation
+        : _destinationLocation ?? _originLocation;
+
+    final result = await _showMapPicker(
+      title: title,
+      initialLocation: initialLocation,
+    );
+
+    if (result != null && mounted) {
+      _applyLocationSelection(isOrigin: isOrigin, result: result);
     }
   }
 
-  /// Mostra mapa interativo para selecionar localização
-  Future<void> _showMapPicker(String title) async {
-    Location? selectedLocation;
-
-    await showDialog(
+  /// Mostra mapa interativo para selecionar localização e retorna resultado
+  Future<GeocodingResult?> _showMapPicker({
+    required String title,
+    Location? initialLocation,
+  }) {
+    return showDialog<GeocodingResult>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          return Dialog(
-            insetPadding: EdgeInsets.zero,
-            child: SizedBox(
-              width: double.infinity,
-              height: double.infinity,
-              child: Scaffold(
-                appBar: AppBar(
-                  title: Text('Selecione $title no mapa'),
-                  backgroundColor: const Color(0xFF2196F3),
-                  foregroundColor: Colors.white,
-                ),
-                body: Stack(
-                  children: [
-                    MapWidget(
-                      initialLocation: _originLocation ?? _destinationLocation,
-                      rides: const [],
-                      showUserLocation: true,
-                      showRideMarkers: false,
-                      onMapTap: (location) {
-                        selectedLocation = location;
-                        setDialogState(() {});
-                      },
-                    ),
-                    // Marcador no centro para indicar seleção
-                    Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Colors.red.withValues(alpha: 0.6),
-                              border: Border.all(color: Colors.white, width: 3),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    // Botão de confirmar
-                    Positioned(
-                      bottom: 30,
-                      left: 20,
-                      right: 20,
-                      child: Container(
-                        height: 56,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF2196F3), Color(0xFF1976D2)],
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(
-                                0xFF2196F3,
-                              ).withValues(alpha: 0.3),
-                              blurRadius: 15,
-                              offset: const Offset(0, 5),
-                            ),
-                          ],
-                        ),
-                        child: ElevatedButton(
-                          onPressed: selectedLocation == null
-                              ? null
-                              : () async {
-                                  // Faz reverse geocoding para obter endereço
-                                  if (selectedLocation != null) {
-                                    final geocodeResult =
-                                        await _googleMapsService.reverseGeocode(
-                                          selectedLocation!,
-                                        );
-
-                                    if (mounted) {
-                                      final finalLocation =
-                                          geocodeResult?.location ??
-                                          selectedLocation!;
-                                      final address =
-                                          geocodeResult?.formattedAddress ??
-                                          '${finalLocation.latitude.toStringAsFixed(6)}, ${finalLocation.longitude.toStringAsFixed(6)}';
-
-                                      setState(() {
-                                        if (title == 'Origem') {
-                                          _originLocation = finalLocation;
-                                          _originController.text = address;
-                                        } else {
-                                          _destinationLocation = finalLocation;
-                                          _destinationController.text = address;
-                                        }
-                                      });
-
-                                      if (mounted) {
-                                        Navigator.pop(context);
-                                      }
-                                    }
-                                  }
-                                },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.transparent,
-                            shadowColor: Colors.transparent,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: const Text(
-                            'Confirmar Localização',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      ),
+      builder: (context) =>
+          _MapLocationPicker(title: title, initialLocation: initialLocation),
     );
   }
 
@@ -394,6 +327,30 @@ class _OfferRideScreenState extends State<OfferRideScreen>
       return;
     }
 
+    if (_isOriginLocked) {
+      final distanceToCampus =
+          LocationService.calculateDistanceBetweenLocations(
+            _originLocation!,
+            _campusLocation,
+          );
+      if (distanceToCampus > _campusDistanceToleranceKm) {
+        _showError('A origem deve ser o campus da UDF.');
+        return;
+      }
+    }
+
+    if (_isDestinationLocked) {
+      final distanceToCampus =
+          LocationService.calculateDistanceBetweenLocations(
+            _destinationLocation!,
+            _campusLocation,
+          );
+      if (distanceToCampus > _campusDistanceToleranceKm) {
+        _showError('O destino deve ser o campus da UDF.');
+        return;
+      }
+    }
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -405,6 +362,34 @@ class _OfferRideScreenState extends State<OfferRideScreen>
 
       if (user == null) {
         _showError('Usuário não autenticado');
+        return;
+      }
+
+      final vehicle = await _vehicleService.getVehicleByDriver(user.uid);
+      if (vehicle == null) {
+        await _showVehicleStatusDialog(
+          title: 'Cadastre seu veículo',
+          message:
+              'Para oferecer caronas, cadastre seu veículo e aguarde a validação.',
+        );
+        return;
+      }
+
+      if (!vehicle.isComplete) {
+        await _showVehicleStatusDialog(
+          title: 'Cadastro incompleto',
+          message:
+              'Conclua todas as informações e documentos do seu veículo antes de oferecer uma carona.',
+        );
+        return;
+      }
+
+      if (vehicle.validationStatus != VehicleValidationStatus.approved) {
+        await _showVehicleStatusDialog(
+          title: 'Veículo em validação',
+          message:
+              'Seu veículo ainda não foi aprovado. Assim que a validação for concluída você poderá oferecer caronas.',
+        );
         return;
       }
 
@@ -910,6 +895,38 @@ class _OfferRideScreenState extends State<OfferRideScreen>
     }
   }
 
+  Future<void> _showVehicleStatusDialog({
+    required String title,
+    required String message,
+  }) async {
+    if (!mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Fechar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              Navigator.of(context).pushNamed('/vehicle-register');
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2196F3),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Atualizar veículo'),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Carrega caronas do motorista
   Future<void> _loadMyRides() async {
     setState(() {
@@ -1086,23 +1103,82 @@ class _OfferRideScreenState extends State<OfferRideScreen>
     }
   }
 
-  /// Abre navegação no Google Maps usando origem e destino da carona
+  /// Abre navegação externa permitindo escolher o app de navegação
   Future<void> _launchNavigation(Ride ride) async {
-    final success = await _googleMapsService.launchNavigation(
-      origin: ride.origin,
-      destination: ride.destination,
-    );
-
-    if (mounted) {
-      if (!success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Não foi possível abrir a navegação'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 2),
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Abrir navegação',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 16),
+                ListTile(
+                  leading: const Icon(
+                    Icons.map_outlined,
+                    color: Color(0xFF4285F4),
+                  ),
+                  title: const Text('Google Maps'),
+                  subtitle: const Text(
+                    'Traçar rota com origem e destino da carona',
+                  ),
+                  onTap: () => Navigator.pop(context, 'google'),
+                ),
+                const Divider(height: 0),
+                ListTile(
+                  leading: const Icon(
+                    Icons.alt_route,
+                    color: Color(0xFF1C8AE4),
+                  ),
+                  title: const Text('Waze'),
+                  subtitle: const Text('Abrir rota no Waze'),
+                  onTap: () => Navigator.pop(context, 'waze'),
+                ),
+                const SizedBox(height: 12),
+              ],
+            ),
           ),
         );
-      }
+      },
+    );
+
+    if (!mounted || choice == null) {
+      return;
+    }
+
+    bool success = false;
+
+    if (choice == 'google') {
+      success = await _googleMapsService.launchNavigation(
+        origin: ride.origin,
+        destination: ride.destination,
+      );
+    } else if (choice == 'waze') {
+      success = await _googleMapsService.launchWazeNavigation(
+        destination: ride.destination,
+      );
+    }
+
+    if (!mounted) return;
+
+    if (!success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Não foi possível abrir a navegação'),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 2),
+        ),
+      );
     }
   }
 
@@ -1156,6 +1232,141 @@ class _OfferRideScreenState extends State<OfferRideScreen>
     }
   }
 
+  /// Inicia uma carona
+  Future<void> _startRide(
+    Ride ride, {
+    required List<RideRequest> passengers,
+  }) async {
+    final canStart = _canStartRide(ride, passengersCount: passengers.length);
+    if (!canStart) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Para iniciar a viagem é necessário ter ao menos um passageiro confirmado '
+            'e aguardar a janela de ${_startRideLeadTimeMinutes} minutos antes da partida.',
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Iniciar Viagem'),
+        content: Text(
+          'Deseja iniciar a viagem para ${ride.destination.address ?? 'o destino'} agora? '
+          'Os passageiros serão notificados.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2196F3),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Iniciar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    final success = await _ridesService.startRide(ride.id);
+
+    if (!mounted) {
+      return;
+    }
+
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Viagem iniciada! Notificando passageiros...'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      // Atualiza lembretes para motorista e passageiros
+      try {
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        final driverId = authProvider.user?.uid;
+        if (driverId != null) {
+          await _notificationService.refreshRemindersIfEnabled(driverId);
+        }
+        for (final request in passengers) {
+          await _notificationService.refreshRemindersIfEnabled(
+            request.passengerId,
+          );
+        }
+      } catch (error) {
+        if (kDebugMode) {
+          print('⚠ Falha ao atualizar lembretes após iniciar viagem: $error');
+        }
+      }
+
+      await _launchNavigation(ride);
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Após encerrar a navegação, retorne ao app para finalizar a viagem.',
+          ),
+          backgroundColor: Color(0xFF1976D2),
+        ),
+      );
+
+      await _loadMyRides();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Não foi possível iniciar a viagem. Tente novamente.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  bool _canStartRide(Ride ride, {required int passengersCount}) {
+    if (ride.status != 'active') {
+      return false;
+    }
+
+    final now = DateTime.now();
+    final startWindow = _startButtonAvailableAt(ride);
+    final isWithinAllowedWindow = now.isAfter(startWindow);
+    final hasPassengers = passengersCount > 0;
+
+    return hasPassengers && isWithinAllowedWindow;
+  }
+
+  DateTime _startButtonAvailableAt(Ride ride) {
+    return ride.dateTime.subtract(Duration(minutes: _startRideLeadTimeMinutes));
+  }
+
+  bool _isWithinStartWindow(Ride ride) {
+    final now = DateTime.now();
+    return now.isAfter(_startButtonAvailableAt(ride));
+  }
+
+  int _minutesUntilStartWindow(Ride ride) {
+    final now = DateTime.now();
+    final availability = _startButtonAvailableAt(ride);
+    final diff = availability.difference(now).inMinutes;
+    return diff > 0 ? diff : 0;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1194,6 +1405,9 @@ class _OfferRideScreenState extends State<OfferRideScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  _buildDirectionSelector(),
+                  const SizedBox(height: 20),
+
                   // Preview do mapa
                   if (_originLocation != null ||
                       _destinationLocation != null ||
@@ -1227,23 +1441,27 @@ class _OfferRideScreenState extends State<OfferRideScreen>
                   ],
 
                   // Origem
-                  _buildLocationField(
+                  _buildLocationPicker(
+                    isOrigin: true,
                     controller: _originController,
                     label: 'Origem',
                     icon: Icons.location_on,
                     color: Colors.green,
-                    onTap: _searchOrigin,
+                    location: _originLocation,
+                    isLocked: _isOriginLocked,
                   ),
 
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 20),
 
                   // Destino
-                  _buildLocationField(
+                  _buildLocationPicker(
+                    isOrigin: false,
                     controller: _destinationController,
                     label: 'Destino',
                     icon: Icons.location_city,
                     color: Colors.red,
-                    onTap: _searchDestination,
+                    location: _destinationLocation,
+                    isLocked: _isDestinationLocked,
                   ),
 
                   const SizedBox(height: 16),
@@ -1351,61 +1569,203 @@ class _OfferRideScreenState extends State<OfferRideScreen>
           );
   }
 
-  /// Campo de localização
-  Widget _buildLocationField({
+  /// Campo completo com autocomplete e seleção no mapa
+  Widget _buildDirectionSelector() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[300]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Sentido da carona',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              ChoiceChip(
+                label: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Icons.school, size: 18),
+                    SizedBox(width: 8),
+                    Text('Indo para a UDF'),
+                  ],
+                ),
+                selected: _rideDirection == RideDirection.toCampus,
+                onSelected: (selected) {
+                  if (selected) {
+                    _applyRideDirection(RideDirection.toCampus);
+                  }
+                },
+              ),
+              ChoiceChip(
+                label: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Icons.directions_car, size: 18),
+                    SizedBox(width: 8),
+                    Text('Saindo da UDF'),
+                  ],
+                ),
+                selected: _rideDirection == RideDirection.fromCampus,
+                onSelected: (selected) {
+                  if (selected) {
+                    _applyRideDirection(RideDirection.fromCampus);
+                  }
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLocationPicker({
+    required bool isOrigin,
     required TextEditingController controller,
     required String label,
     required IconData icon,
     required Color color,
-    required VoidCallback onTap,
+    required Location? location,
+    required bool isLocked,
   }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey[300]!),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AddressAutocomplete(
+          label: label,
+          hintText: 'Digite o endereço ou selecione no mapa',
+          prefixIcon: icon,
+          controller: controller,
+          countryCodes: const ['br'],
+          enabled: !isLocked,
+          showClearButton: !isLocked,
+          onAddressSelected: (result) {
+            final geocodingResult = GeocodingResult(
+              formattedAddress: result.displayName,
+              location: result.location,
+            );
+            _applyLocationSelection(
+              isOrigin: isOrigin,
+              result: geocodingResult,
+            );
+          },
+          onQueryChanged: isLocked
+              ? null
+              : (_) => _handleLocationEdition(isOrigin: isOrigin),
+          onClear: isLocked ? null : () => _clearLocation(isOrigin: isOrigin),
         ),
-        child: Row(
-          children: [
-            Icon(icon, color: color, size: 28),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    controller.text.isEmpty
-                        ? 'Toque para buscar'
-                        : controller.text,
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: controller.text.isEmpty
-                          ? Colors.grey[400]
-                          : Colors.black87,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
+        const SizedBox(height: 8),
+        if (isLocked)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF2196F3).withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
             ),
-            Icon(Icons.chevron_right, color: Colors.grey[600]),
-          ],
-        ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Icon(Icons.info_outline, color: Color(0xFF2196F3), size: 18),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Este ponto é fixo no campus da UDF para este sentido de carona.',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () => _handleMapSelection(isOrigin: isOrigin),
+                icon: const Icon(Icons.map),
+                label: const Text('Selecionar no mapa'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF2196F3),
+                  side: const BorderSide(color: Color(0xFF2196F3)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                ),
+              ),
+              if (location != null)
+                TextButton.icon(
+                  onPressed: () => _clearLocation(isOrigin: isOrigin),
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('Limpar seleção'),
+                ),
+            ],
+          ),
+        if (location != null) ...[
+          const SizedBox(height: 8),
+          _buildLocationPreview(location: location, color: color),
+        ],
+      ],
+    );
+  }
+
+  /// Mostra resumo da localização selecionada
+  Widget _buildLocationPreview({
+    required Location location,
+    required Color color,
+  }) {
+    final address =
+        location.address ??
+        '${location.latitude.toStringAsFixed(6)}, ${location.longitude.toStringAsFixed(6)}';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.place, color: color, size: 22),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  address,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Lat: ${location.latitude.toStringAsFixed(6)} | '
+            'Lng: ${location.longitude.toStringAsFixed(6)}',
+            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+          ),
+        ],
       ),
     );
   }
@@ -1848,7 +2208,58 @@ class _OfferRideScreenState extends State<OfferRideScreen>
                 ],
 
                 // Ações
-                if (ride.status == 'active') ...[
+                if (ride.status == 'active' ||
+                    ride.status == 'in_progress') ...[
+                  if (ride.status == 'active' && acceptedRequests.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _buildInfoBanner(
+                        icon: Icons.person_add_alt_1,
+                        backgroundColor: Colors.orange.shade50,
+                        foregroundColor: Colors.orange.shade700,
+                        title: 'Aguardando passageiros confirmados',
+                        subtitle:
+                            'Aceite pelo menos um passageiro para liberar o botão "Iniciar viagem".',
+                      ),
+                    ),
+                  if (ride.status == 'active' &&
+                      acceptedRequests.isNotEmpty &&
+                      !_isWithinStartWindow(ride))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _buildInfoBanner(
+                        icon: Icons.schedule,
+                        backgroundColor: Colors.blue.shade50,
+                        foregroundColor: Colors.blue.shade700,
+                        title:
+                            'Botão disponível ${_startRideLeadTimeMinutes} minutos antes',
+                        subtitle:
+                            'Ele aparecerá por volta das ${DateFormat('HH:mm').format(_startButtonAvailableAt(ride))} '
+                            '(${_minutesUntilStartWindow(ride)} min restantes).',
+                      ),
+                    ),
+                  if (_canStartRide(
+                        ride,
+                        passengersCount: acceptedRequests.length,
+                      ) &&
+                      ride.status == 'active')
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () =>
+                              _startRide(ride, passengers: acceptedRequests),
+                          icon: const Icon(Icons.play_arrow),
+                          label: const Text('Iniciar viagem'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF2196F3),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                        ),
+                      ),
+                    ),
                   Row(
                     children: [
                       Expanded(
@@ -1877,6 +2288,65 @@ class _OfferRideScreenState extends State<OfferRideScreen>
                     ],
                   ),
                 ],
+
+                if (ride.status == 'in_progress') ...[
+                  const SizedBox(height: 16),
+                  _buildInfoBanner(
+                    icon: Icons.directions_car_filled,
+                    backgroundColor: Colors.blue.shade50,
+                    foregroundColor: Colors.blue.shade700,
+                    title: 'Viagem em andamento',
+                    subtitle: ride.startedAt != null
+                        ? 'Iniciada às ${DateFormat('HH:mm').format(ride.startedAt!)}. '
+                              'Finalize no app ao término do trajeto.'
+                        : 'Finalize no app assim que concluir o trajeto com os passageiros.',
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoBanner({
+    required IconData icon,
+    required Color backgroundColor,
+    required Color foregroundColor,
+    required String title,
+    required String subtitle,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: foregroundColor),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: foregroundColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    color: foregroundColor.withValues(alpha: 0.8),
+                  ),
+                ),
               ],
             ),
           ),
@@ -2035,147 +2505,349 @@ class _OfferRideScreenState extends State<OfferRideScreen>
   }
 }
 
-/// Diálogo de busca de endereço usando Nominatim
-class _SearchAddressDialog extends StatefulWidget {
+/// Diálogo de seleção de localização no mapa
+class _MapLocationPicker extends StatefulWidget {
   final String title;
+  final Location? initialLocation;
 
-  const _SearchAddressDialog({required this.title});
+  const _MapLocationPicker({required this.title, this.initialLocation});
 
   @override
-  State<_SearchAddressDialog> createState() => _SearchAddressDialogState();
+  State<_MapLocationPicker> createState() => _MapLocationPickerState();
 }
 
-class _SearchAddressDialogState extends State<_SearchAddressDialog> {
-  NominatimResult? _selectedResult;
+class _MapLocationPickerState extends State<_MapLocationPicker> {
+  final GoogleMapsService _googleMapsService = GoogleMapsService();
+  final TextEditingController _searchController = TextEditingController();
 
-  void _onAddressSelected(NominatimResult result) {
-    setState(() {
-      _selectedResult = result;
-    });
-  }
+  GoogleMapController? _mapController;
+  CameraPosition? _initialCamera;
+  Location? _currentSelection;
+  String? _addressPreview;
+  bool _isReverseGeocoding = false;
+  Timer? _reverseTimer;
+  LatLng? _pendingTarget;
 
-  void _confirmSelection() {
-    if (_selectedResult != null) {
-      // Converte NominatimResult para GeocodingResult (compatibilidade)
-      final geocodingResult = GeocodingResult(
-        formattedAddress: _selectedResult!.displayName,
-        location: _selectedResult!.location,
-      );
-      Navigator.of(context).pop(geocodingResult);
+  @override
+  void initState() {
+    super.initState();
+
+    final fallbackLocation =
+        widget.initialLocation ??
+        Location(
+          latitude: MapsConfig.defaultLatitude,
+          longitude: MapsConfig.defaultLongitude,
+        );
+
+    _initialCamera = CameraPosition(
+      target: LatLng(fallbackLocation.latitude, fallbackLocation.longitude),
+      zoom: MapsConfig.defaultZoom,
+    );
+
+    _currentSelection = fallbackLocation;
+    _addressPreview = fallbackLocation.address;
+
+    if (fallbackLocation.address != null) {
+      _searchController.text = fallbackLocation.address!;
+    } else {
+      _scheduleReverseGeocoding(fallbackLocation);
     }
   }
 
   @override
-  Widget build(BuildContext context) {
+  void dispose() {
+    _reverseTimer?.cancel();
+    _searchController.dispose();
+    _mapController?.dispose();
+    super.dispose();
+  }
+
+  void _scheduleReverseGeocoding(Location location) {
+    _reverseTimer?.cancel();
+
+    setState(() {
+      _isReverseGeocoding = true;
+      _currentSelection = location;
+    });
+
+    _reverseTimer = Timer(const Duration(milliseconds: 400), () async {
+      final result = await _googleMapsService.reverseGeocode(location);
+      if (!mounted) return;
+
+      setState(() {
+        _isReverseGeocoding = false;
+        if (result != null) {
+          _currentSelection = result.location;
+          _addressPreview = result.formattedAddress;
+        } else {
+          _currentSelection = location;
+          _addressPreview =
+              '${location.latitude.toStringAsFixed(6)}, ${location.longitude.toStringAsFixed(6)}';
+        }
+      });
+    });
+  }
+
+  void _onCameraMove(CameraPosition position) {
+    _pendingTarget = position.target;
+  }
+
+  void _onCameraIdle() {
+    if (_pendingTarget == null) {
+      return;
+    }
+
+    final newLocation = Location(
+      latitude: _pendingTarget!.latitude,
+      longitude: _pendingTarget!.longitude,
+    );
+
+    _scheduleReverseGeocoding(newLocation);
+  }
+
+  void _onAddressSelected(NominatimResult result) {
+    final location = result.location.copyWith(address: result.displayName);
+    final target = LatLng(location.latitude, location.longitude);
+
+    _mapController?.animateCamera(
+      CameraUpdate.newLatLngZoom(target, MapsConfig.defaultZoom),
+    );
+
+    setState(() {
+      _currentSelection = location;
+      _addressPreview = result.displayName;
+      _pendingTarget = target;
+      _isReverseGeocoding = false;
+    });
+  }
+
+  void _confirmSelection() {
+    if (_currentSelection == null) {
+      return;
+    }
+
+    final location = _currentSelection!;
+    final address =
+        _addressPreview ??
+        '${location.latitude.toStringAsFixed(6)}, ${location.longitude.toStringAsFixed(6)}';
+
+    Navigator.of(context).pop(
+      GeocodingResult(
+        formattedAddress: address,
+        location: location.copyWith(address: address),
+      ),
+    );
+  }
+
+  Widget _buildUnsupportedContent(String message, [String? detail]) {
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Container(
-        height: 600,
-        padding: const EdgeInsets.all(20),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // Título
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Buscar ${widget.title}',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-              ],
-            ),
+            const Icon(Icons.error_outline, size: 40, color: Colors.redAccent),
             const SizedBox(height: 16),
-
-            // Campo de autocomplete
-            AddressAutocomplete(
-              label: widget.title,
-              hintText: 'Digite o endereço...',
-              prefixIcon: Icons.search,
-              countryCodes: ['br'], // Filtra resultados para Brasil
-              limit: 10,
-              onAddressSelected: _onAddressSelected,
+            Text(
+              message,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              textAlign: TextAlign.center,
             ),
+            if (detail != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                detail,
+                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                textAlign: TextAlign.center,
+              ),
+            ],
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Fechar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-            const SizedBox(height: 24),
+  @override
+  Widget build(BuildContext context) {
+    if (kIsWeb) {
+      return _buildUnsupportedContent(
+        'Mapa indisponível na Web',
+        'O Google Maps só está disponível nos aplicativos móveis.',
+      );
+    }
 
-            // Preview do endereço selecionado
-            if (_selectedResult != null) ...[
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2196F3).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF2196F3), width: 2),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Row(
-                      children: [
-                        Icon(Icons.check_circle, color: Color(0xFF2196F3)),
-                        SizedBox(width: 8),
-                        Text(
-                          'Endereço selecionado',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF2196F3),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _selectedResult!.displayName,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w500,
+    if (!MapsConfig.isApiKeyConfigured) {
+      return _buildUnsupportedContent(
+        'API Key do Google Maps não configurada',
+        'Configure a chave em lib/config/maps_config.dart antes de selecionar no mapa.',
+      );
+    }
+
+    if (_initialCamera == null) {
+      return _buildUnsupportedContent('Carregando mapa...');
+    }
+
+    return Dialog(
+      insetPadding: EdgeInsets.zero,
+      child: SizedBox(
+        width: double.infinity,
+        height: double.infinity,
+        child: Scaffold(
+          appBar: AppBar(
+            title: Text('Selecionar ${widget.title} no mapa'),
+            backgroundColor: const Color(0xFF2196F3),
+            foregroundColor: Colors.white,
+            leading: IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ),
+          body: Stack(
+            children: [
+              GoogleMap(
+                initialCameraPosition: _initialCamera!,
+                onMapCreated: (controller) {
+                  _mapController = controller;
+                },
+                onCameraMove: _onCameraMove,
+                onCameraIdle: _onCameraIdle,
+                myLocationEnabled: true,
+                myLocationButtonEnabled: true,
+                compassEnabled: true,
+                zoomControlsEnabled: true,
+                mapType: MapType.normal,
+              ),
+              Positioned(
+                top: 16,
+                left: 16,
+                right: 16,
+                child: SafeArea(
+                  child: Material(
+                    elevation: 6,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: AddressAutocomplete(
+                        label: 'Buscar endereço',
+                        hintText: 'Digite um endereço ou ponto de referência',
+                        prefixIcon: Icons.search,
+                        controller: _searchController,
+                        countryCodes: const ['br'],
+                        onAddressSelected: _onAddressSelected,
+                        onQueryChanged: (_) {},
+                        onClear: () {},
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Lat: ${_selectedResult!.location.latitude.toStringAsFixed(6)}, '
-                      'Lng: ${_selectedResult!.location.longitude.toStringAsFixed(6)}',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  ),
+                ),
+              ),
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Center(
+                    child: Icon(
+                      Icons.location_on,
+                      color: Colors.red.shade600,
+                      size: 48,
                     ),
-                  ],
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 16,
+                right: 16,
+                bottom: 24,
+                child: SafeArea(
+                  top: false,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.15),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _addressPreview ??
+                                  'Centralize o mapa no ponto desejado ou busque um endereço.',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            if (_currentSelection != null)
+                              Text(
+                                'Lat: ${_currentSelection!.latitude.toStringAsFixed(6)} | '
+                                'Lng: ${_currentSelection!.longitude.toStringAsFixed(6)}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            if (_isReverseGeocoding) ...[
+                              const SizedBox(height: 10),
+                              Row(
+                                children: const [
+                                  SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Buscando endereço...',
+                                    style: TextStyle(fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: ElevatedButton(
+                          onPressed: _currentSelection == null
+                              ? null
+                              : _confirmSelection,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF2196F3),
+                            foregroundColor: Colors.white,
+                            textStyle: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          child: const Text('Confirmar localização'),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
-
-            const Spacer(),
-
-            // Botões de ação
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancelar'),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: _selectedResult != null ? _confirmSelection : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2196F3),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 12,
-                    ),
-                  ),
-                  child: const Text('Confirmar'),
-                ),
-              ],
-            ),
-          ],
+          ),
         ),
       ),
     );

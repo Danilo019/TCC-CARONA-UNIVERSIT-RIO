@@ -1,8 +1,8 @@
-import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import '../models/vehicle.dart';
+import '../models/vehicle_validation_status.dart';
+import '../models/vehicle_thumbnail_type.dart';
 
 /// Serviço para gerenciar veículos no Firestore
 class VehicleService {
@@ -11,10 +11,10 @@ class VehicleService {
   VehicleService._internal();
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseStorage _storage = FirebaseStorage.instance;
 
   /// Collection reference para veículos
-  CollectionReference get _vehiclesCollection => _firestore.collection('vehicles');
+  CollectionReference get _vehiclesCollection =>
+      _firestore.collection('vehicles');
 
   // ===========================================================================
   // OPERAÇÕES DE LEITURA
@@ -41,6 +41,36 @@ class VehicleService {
     }
   }
 
+  /// Verifica se já existe veículo com a placa informada
+  Future<bool> hasPlateConflict(
+    String plate, {
+    String? excludeVehicleId,
+  }) async {
+    try {
+      final formattedPlate = Vehicle.formatPlate(plate);
+      final snapshot = await _vehiclesCollection
+          .where('plate', isEqualTo: formattedPlate)
+          .limit(1)
+          .get();
+
+      if (snapshot.docs.isEmpty) {
+        return false;
+      }
+
+      final doc = snapshot.docs.first;
+      if (excludeVehicleId != null && doc.id == excludeVehicleId) {
+        return false;
+      }
+
+      return true;
+    } catch (e) {
+      if (kDebugMode) {
+        print('✗ Erro ao verificar placa duplicada: $e');
+      }
+      return false;
+    }
+  }
+
   /// Stream do veículo de um motorista
   Stream<Vehicle?> watchVehicleByDriver(String driverId) {
     return _vehiclesCollection
@@ -48,18 +78,18 @@ class VehicleService {
         .limit(1)
         .snapshots()
         .map((snapshot) {
-      if (snapshot.docs.isEmpty) {
-        return null;
-      }
-      try {
-        return Vehicle.fromFirestore(snapshot.docs.first);
-      } catch (e) {
-        if (kDebugMode) {
-          print('✗ Erro ao converter veículo: $e');
-        }
-        return null;
-      }
-    });
+          if (snapshot.docs.isEmpty) {
+            return null;
+          }
+          try {
+            return Vehicle.fromFirestore(snapshot.docs.first);
+          } catch (e) {
+            if (kDebugMode) {
+              print('✗ Erro ao converter veículo: $e');
+            }
+            return null;
+          }
+        });
   }
 
   // ===========================================================================
@@ -74,6 +104,8 @@ class VehicleService {
       if (vehicle.updatedAt != null) {
         vehicleMap['updatedAt'] = Timestamp.fromDate(vehicle.updatedAt!);
       }
+      vehicleMap['validationStatus'] = vehicle.validationStatus.asString;
+      vehicleMap['thumbnailType'] = vehicle.thumbnailType.asString;
 
       final docRef = await _vehiclesCollection.add(vehicleMap);
 
@@ -95,6 +127,8 @@ class VehicleService {
     try {
       final vehicleMap = vehicle.toMap();
       vehicleMap['updatedAt'] = Timestamp.fromDate(DateTime.now());
+      vehicleMap['validationStatus'] = vehicle.validationStatus.asString;
+      vehicleMap['thumbnailType'] = vehicle.thumbnailType.asString;
 
       await _vehiclesCollection.doc(vehicle.id).update(vehicleMap);
 
@@ -124,77 +158,6 @@ class VehicleService {
     } catch (e) {
       if (kDebugMode) {
         print('✗ Erro ao deletar veículo: $e');
-      }
-      return false;
-    }
-  }
-
-  // ===========================================================================
-  // UPLOAD DE IMAGENS
-  // ===========================================================================
-
-  /// Faz upload de uma imagem para o Firebase Storage
-  /// 
-  /// [file] - Arquivo de imagem
-  /// [path] - Caminho no Storage (ex: 'vehicles/photo.jpg')
-  /// 
-  /// Retorna a URL da imagem ou null em caso de erro
-  Future<String?> uploadImage(File file, String path) async {
-    try {
-      final ref = _storage.ref().child(path);
-      
-      final uploadTask = ref.putFile(file);
-      final snapshot = await uploadTask;
-      final downloadURL = await snapshot.ref.getDownloadURL();
-
-      if (kDebugMode) {
-        print('✓ Imagem enviada: $downloadURL');
-      }
-
-      return downloadURL;
-    } catch (e) {
-      if (kDebugMode) {
-        print('✗ Erro ao fazer upload da imagem: $e');
-      }
-      return null;
-    }
-  }
-
-  /// Faz upload da foto do veículo
-  Future<String?> uploadVehiclePhoto(File file, String driverId) async {
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final path = 'vehicles/$driverId/vehicle_$timestamp.jpg';
-    return uploadImage(file, path);
-  }
-
-  /// Faz upload da foto da CNH
-  Future<String?> uploadCnhPhoto(File file, String driverId) async {
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final path = 'documents/$driverId/cnh_$timestamp.jpg';
-    return uploadImage(file, path);
-  }
-
-  /// Faz upload da foto do CRLV
-  Future<String?> uploadCrlvPhoto(File file, String driverId) async {
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final path = 'documents/$driverId/crlv_$timestamp.jpg';
-    return uploadImage(file, path);
-  }
-
-  /// Deleta uma imagem do Storage
-  Future<bool> deleteImage(String url) async {
-    try {
-      final ref = _storage.refFromURL(url);
-      await ref.delete();
-
-      if (kDebugMode) {
-        print('✓ Imagem deletada do Storage');
-      }
-
-      return true;
-    } catch (e) {
-      if (kDebugMode) {
-        print('✗ Erro ao deletar imagem: $e');
       }
       return false;
     }

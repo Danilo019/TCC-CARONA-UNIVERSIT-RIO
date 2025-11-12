@@ -93,6 +93,7 @@ class FirestoreService {
     required String uid,
     String? displayName,
     String? photoURL,
+    bool removePhoto = false,
   }) async {
     try {
       final updateData = <String, dynamic>{};
@@ -101,8 +102,16 @@ class FirestoreService {
         updateData['displayName'] = displayName;
       }
 
-      if (photoURL != null) {
+      if (removePhoto) {
+        updateData['photoURL'] = FieldValue.delete();
+        updateData['photoURLBase64'] = FieldValue.delete();
+      } else if (photoURL != null) {
         updateData['photoURL'] = photoURL;
+        if (photoURL.startsWith('data:image')) {
+          updateData['photoURLBase64'] = photoURL;
+        } else {
+          updateData['photoURLBase64'] = FieldValue.delete();
+        }
       }
 
       if (updateData.isEmpty) {
@@ -114,7 +123,10 @@ class FirestoreService {
 
       updateData['updatedAt'] = FieldValue.serverTimestamp();
 
-      await _usersCollection.doc(uid).update(updateData);
+      await _usersCollection.doc(uid).set(
+        updateData,
+        SetOptions(merge: true),
+      );
 
       if (kDebugMode) {
         print('✓ Perfil atualizado: $uid');

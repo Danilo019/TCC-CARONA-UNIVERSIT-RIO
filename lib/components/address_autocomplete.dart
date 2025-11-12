@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import '../services/nominatim_service.dart';
 
 /// Componente de autocomplete para busca de endereços usando Nominatim
-/// 
+///
 /// Funcionalidades:
 /// - Campo de texto com sugestões em tempo real
 /// - Debounce de 800ms para evitar requisições excessivas
@@ -26,6 +26,12 @@ class AddressAutocomplete extends StatefulWidget {
   /// Callback quando um endereço é selecionado
   final Function(NominatimResult)? onAddressSelected;
 
+  /// Callback quando o texto digitado muda
+  final ValueChanged<String>? onQueryChanged;
+
+  /// Callback quando o campo é limpo
+  final VoidCallback? onClear;
+
   /// Códigos de país para filtrar resultados (ex: ['br'])
   final List<String>? countryCodes;
 
@@ -41,6 +47,9 @@ class AddressAutocomplete extends StatefulWidget {
   /// Controlador de texto (opcional)
   final TextEditingController? controller;
 
+  /// Habilita/Desabilita o campo
+  final bool enabled;
+
   const AddressAutocomplete({
     super.key,
     this.label,
@@ -48,11 +57,14 @@ class AddressAutocomplete extends StatefulWidget {
     this.prefixIcon,
     this.initialValue,
     this.onAddressSelected,
+    this.onQueryChanged,
+    this.onClear,
     this.countryCodes,
     this.limit = 10,
     this.showSearchIcon = true,
     this.showClearButton = true,
     this.controller,
+    this.enabled = true,
   });
 
   @override
@@ -63,7 +75,7 @@ class _AddressAutocompleteState extends State<AddressAutocomplete> {
   final NominatimService _nominatimService = NominatimService();
   late TextEditingController _controller;
   Timer? _debounceTimer;
-  
+
   List<NominatimResult> _suggestions = [];
   bool _isLoading = false;
   bool _showSuggestions = false;
@@ -73,7 +85,7 @@ class _AddressAutocompleteState extends State<AddressAutocomplete> {
   void initState() {
     super.initState();
     _controller = widget.controller ?? TextEditingController();
-    
+
     if (widget.initialValue != null) {
       _controller.text = widget.initialValue!;
     }
@@ -102,6 +114,7 @@ class _AddressAutocompleteState extends State<AddressAutocomplete> {
   void _onTextChanged(String value) {
     // Cancela timer anterior
     _debounceTimer?.cancel();
+    widget.onQueryChanged?.call(value);
 
     // Se o campo estiver vazio, limpa sugestões
     if (value.trim().isEmpty) {
@@ -152,7 +165,7 @@ class _AddressAutocompleteState extends State<AddressAutocomplete> {
       if (kDebugMode) {
         print('✗ Erro ao buscar endereços: $e');
       }
-      
+
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -168,9 +181,9 @@ class _AddressAutocompleteState extends State<AddressAutocomplete> {
       _controller.text = result.displayName;
       _showSuggestions = false;
     });
-    
+
     _focusNode.unfocus();
-    
+
     // Chama callback
     widget.onAddressSelected?.call(result);
   }
@@ -183,6 +196,7 @@ class _AddressAutocompleteState extends State<AddressAutocomplete> {
       _showSuggestions = false;
     });
     _focusNode.requestFocus();
+    widget.onClear?.call();
   }
 
   @override
@@ -195,6 +209,7 @@ class _AddressAutocompleteState extends State<AddressAutocomplete> {
         TextField(
           controller: _controller,
           focusNode: _focusNode,
+          enabled: widget.enabled,
           onChanged: _onTextChanged,
           onTap: () {
             if (_controller.text.isNotEmpty && _suggestions.isNotEmpty) {
@@ -209,24 +224,25 @@ class _AddressAutocompleteState extends State<AddressAutocomplete> {
             prefixIcon: widget.prefixIcon != null
                 ? Icon(widget.prefixIcon)
                 : (widget.showSearchIcon ? const Icon(Icons.search) : null),
-            suffixIcon: _controller.text.isNotEmpty && widget.showClearButton
+            suffixIcon:
+                widget.enabled &&
+                    _controller.text.isNotEmpty &&
+                    widget.showClearButton
                 ? IconButton(
                     icon: const Icon(Icons.clear),
                     onPressed: _clearField,
                   )
                 : _isLoading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: Padding(
-                          padding: EdgeInsets.all(12.0),
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      )
-                    : null,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: Padding(
+                      padding: EdgeInsets.all(12.0),
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : null,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             filled: true,
             fillColor: Colors.grey[50],
             contentPadding: const EdgeInsets.symmetric(
@@ -255,45 +271,39 @@ class _AddressAutocompleteState extends State<AddressAutocomplete> {
             child: _isLoading
                 ? const Padding(
                     padding: EdgeInsets.all(16.0),
-                    child: Center(
-                      child: CircularProgressIndicator(),
-                    ),
+                    child: Center(child: CircularProgressIndicator()),
                   )
                 : _suggestions.isEmpty
-                    ? Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Text(
-                          'Nenhum resultado encontrado',
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 14,
-                          ),
+                ? Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Text(
+                      'Nenhum resultado encontrado',
+                      style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                    ),
+                  )
+                : ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: _suggestions.length,
+                    separatorBuilder: (context, index) =>
+                        const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final suggestion = _suggestions[index];
+                      return ListTile(
+                        leading: const Icon(
+                          Icons.location_on,
+                          color: Colors.red,
                         ),
-                      )
-                    : ListView.separated(
-                        shrinkWrap: true,
-                        itemCount: _suggestions.length,
-                        separatorBuilder: (context, index) => const Divider(
-                          height: 1,
+                        title: Text(
+                          suggestion.displayName,
+                          style: const TextStyle(fontSize: 14),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        itemBuilder: (context, index) {
-                          final suggestion = _suggestions[index];
-                          return ListTile(
-                            leading: const Icon(
-                              Icons.location_on,
-                              color: Colors.red,
-                            ),
-                            title: Text(
-                              suggestion.displayName,
-                              style: const TextStyle(fontSize: 14),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            dense: true,
-                            onTap: () => _selectAddress(suggestion),
-                          );
-                        },
-                      ),
+                        dense: true,
+                        onTap: () => _selectAddress(suggestion),
+                      );
+                    },
+                  ),
           ),
         ],
       ],

@@ -315,6 +315,9 @@ class RidesService {
         rideMap['updatedAt'] = Timestamp.fromDate(ride.updatedAt!);
       }
       rideMap['isAvailable'] = ride.status == 'active' && ride.availableSeats > 0;
+      if (rideMap['startedAt'] == null) {
+        rideMap.remove('startedAt');
+      }
 
       final originGeoPoint = ride.origin.toGeoPoint();
       final originGeoHash = GeohashUtils.encode(
@@ -378,6 +381,9 @@ class RidesService {
       rideMap.remove('createdAt');
       rideMap['updatedAt'] = FieldValue.serverTimestamp();
       rideMap['isAvailable'] = ride.status == 'active' && ride.availableSeats > 0;
+      if (rideMap['startedAt'] == null) {
+        rideMap.remove('startedAt');
+      }
 
       await _ridesCollection.doc(ride.id).update(rideMap);
 
@@ -519,6 +525,51 @@ class RidesService {
     } catch (e) {
       if (kDebugMode) {
         print('✗ Erro ao finalizar carona: $e');
+      }
+      return false;
+    }
+  }
+
+  /// Inicia uma carona
+  Future<bool> startRide(String rideId) async {
+    try {
+      return await _firestore.runTransaction((transaction) async {
+        final rideRef = _ridesCollection.doc(rideId);
+        final snapshot = await transaction.get(rideRef);
+
+        if (!snapshot.exists) {
+          if (kDebugMode) {
+            print('✗ Carona não encontrada para iniciar: $rideId');
+          }
+          return false;
+        }
+
+        final ride = Ride.fromFirestore(snapshot);
+        if (ride.status != 'active') {
+          if (kDebugMode) {
+            print(
+              '✗ Carona não pode ser iniciada. Status atual: ${ride.status}',
+            );
+          }
+          return false;
+        }
+
+        transaction.update(rideRef, {
+          'status': 'in_progress',
+          'isAvailable': false,
+          'startedAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        if (kDebugMode) {
+          print('✓ Carona iniciada: $rideId');
+        }
+
+        return true;
+      });
+    } catch (error) {
+      if (kDebugMode) {
+        print('✗ Erro ao iniciar carona: $error');
       }
       return false;
     }

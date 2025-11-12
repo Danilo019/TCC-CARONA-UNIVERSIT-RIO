@@ -285,10 +285,28 @@ class StorageService {
     try {
       // Remove Base64 do Firestore se existir
       final firestore = FirebaseFirestore.instance;
-      await firestore.collection('users').doc(userId).update({
-        'photoURLBase64': FieldValue.delete(),
-        'photoURL': FieldValue.delete(),
-      });
+      final docRef = firestore.collection('users').doc(userId);
+
+      try {
+        await docRef.update({
+          'photoURLBase64': FieldValue.delete(),
+          'photoURL': FieldValue.delete(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      } on FirebaseException catch (e) {
+        if (e.code == 'not-found') {
+          await docRef.set(
+            {
+              'photoURLBase64': FieldValue.delete(),
+              'photoURL': FieldValue.delete(),
+              'updatedAt': FieldValue.serverTimestamp(),
+            },
+            SetOptions(merge: true),
+          );
+        } else {
+          rethrow;
+        }
+      }
 
       // Tenta deletar do Firebase Storage se habilitado
       if (useFirebaseStorage) {
