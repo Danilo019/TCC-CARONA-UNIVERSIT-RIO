@@ -4,6 +4,7 @@ import '../services/auth_service.dart';
 import '../services/session_service.dart';
 import '../models/auth_user.dart';
 import '../services/notification_service.dart';
+import '../services/firestore_service.dart';
 
 enum AuthStatus { initial, loading, authenticated, unauthenticated, error }
 
@@ -11,6 +12,7 @@ class AuthProvider with ChangeNotifier {
   final AuthService _authService = AuthService();
   final SessionService _sessionService = SessionService();
   final NotificationService _notificationService = NotificationService();
+  final FirestoreService _firestoreService = FirestoreService();
 
   AuthStatus _status = AuthStatus.initial;
   AuthUser? _user;
@@ -38,7 +40,7 @@ class AuthProvider with ChangeNotifier {
       // Verifica se já existe um usuário autenticado
       final currentUser = _authService.currentUser;
       if (currentUser != null) {
-        _user = AuthUser.fromFirebaseUser(currentUser);
+        await _loadUserData(currentUser);
         _setStatus(AuthStatus.authenticated);
 
         // Salva sessão persistentemente
@@ -62,7 +64,7 @@ class AuthProvider with ChangeNotifier {
   /// Callback para mudanças no estado de autenticação
   void _onAuthStateChanged(User? firebaseUser) async {
     if (firebaseUser != null) {
-      _user = AuthUser.fromFirebaseUser(firebaseUser);
+      await _loadUserData(firebaseUser);
       _setStatus(AuthStatus.authenticated);
 
       // Salva sessão persistentemente
@@ -197,6 +199,29 @@ class AuthProvider with ChangeNotifier {
     } catch (e) {
       _setError('Erro ao recarregar usuário: $e');
     }
+  }
+
+  Future<void> _loadUserData(User firebaseUser) async {
+    final baseUser = AuthUser.fromFirebaseUser(firebaseUser);
+    try {
+      final firestoreUser = await _firestoreService.getUser(firebaseUser.uid);
+      if (firestoreUser != null) {
+        _user = baseUser.copyWith(
+          displayName: firestoreUser.displayName ?? baseUser.displayName,
+          photoURL: firestoreUser.photoURL ?? baseUser.photoURL,
+          emailVerified: firestoreUser.emailVerified,
+          creationTime: firestoreUser.creationTime ?? baseUser.creationTime,
+          lastSignInTime:
+              firestoreUser.lastSignInTime ?? baseUser.lastSignInTime,
+        );
+        return;
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('⚠ Falha ao carregar dados extras do usuário no Firestore: $e');
+      }
+    }
+    _user = baseUser;
   }
 
   /// Define o status e notifica listeners
