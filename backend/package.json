@@ -4,6 +4,7 @@
   "description": "Backend simples para reset de senha - Carona Universitária",
   "main": "server.js",
   "scripts": {
+    "prestart": "node validate_env.js",
     "start": "node server.js",
     "dev": "node server.js"
   },
