@@ -7,5 +7,5 @@ cmds = ["npm install"]
 [start]
 cmd = "node server.js"
 
-[providers]
-railway = true
+# Força detecção do provider Node de forma explícita (Nixpacks espera uma lista, não um mapa)
+providers = ["node"]
