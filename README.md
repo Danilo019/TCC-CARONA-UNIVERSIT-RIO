@@ -1,11 +1,5 @@
 # Carona Universitária UDF 🚗
 
-<<<<<<< HEAD
-<div align="**center**">
-  <img src="assets/images/logo_carona_universitária.png" alt="Logo Carona Universitária" width="120"/>
-  <br><br>
-****
-=======
 > Mobilidade colaborativa, segura e sustentável para a comunidade acadêmica.
 
 <div align="center">
@@ -13,7 +7,6 @@
 </div>
 
 ## 📋 Visão Geral
->>>>>>> 6bb4194ff6fc98fe80a2611c8ca9687f91aa5f7d
 
 O **Carona Universitária UDF** é um aplicativo Flutter que conecta estudantes, professores e colaboradores para compartilhamento solidário de caronas. Focado em **segurança**, **sustentabilidade** e **economia**, reduzindo trânsito e emissão de CO₂.
 
@@ -198,10 +191,10 @@ Este projeto está licenciado sob os termos do arquivo `LICENSE`.
 ## 🎓 Instituição
 
 <p align="center"><strong>Universidade do Distrito Federal (UDF)</strong></p>
-****
+
 ---
 
 <p align="center">
   <strong>Mobilidade acadêmica consciente</strong><br/>
   Feito com ❤️ usando Flutter
-</p>********
+</p>
