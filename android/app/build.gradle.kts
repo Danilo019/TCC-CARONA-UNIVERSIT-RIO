@@ -1,3 +1,4 @@
+import java.util.Properties
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -11,6 +12,15 @@ android {
     namespace = "com.carona.universitaria"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
+
+    // Carrega credenciais de assinatura de release a partir de android/key.properties
+    val keystoreProperties = Properties().apply {
+        val file = rootProject.file("android/key.properties")
+        if (file.exists()) {
+            file.inputStream().use { this.load(it) }
+        }
+    }
+    val hasReleaseSigning = !keystoreProperties.getProperty("storeFile").isNullOrBlank()
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -33,11 +43,30 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            if (hasReleaseSigning) {
+                val storeFilePath = keystoreProperties.getProperty("storeFile")
+                storeFile = file(storeFilePath)
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Usa release signing se disponível; caso contrário, assina com debug para não quebrar build local
+            signingConfig = if (hasReleaseSigning) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
+            // Otimizações (ajuste conforme necessário)
+            isMinifyEnabled = false
+            isShrinkResources = false
+            // Se habilitar minify, use regras do R8/Proguard
+            // proguardFiles(
+            //     getDefaultProguardFile("proguard-android-optimize.txt"),
+            //     "proguard-rules.pro"
+            // )
         }
     }
 }

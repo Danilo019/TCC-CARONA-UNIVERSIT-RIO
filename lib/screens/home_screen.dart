@@ -538,10 +538,8 @@ class _HomeScreenState extends State<HomeScreen> {
             _loadChats();
             // Atualiza contador de não lidas
             _updateUnreadCount();
-          } else if (index == 1) {
-            // Viagens
-            _showComingSoonDialog('Viagens');
           }
+          // index == 1 (Viagens) já é tratado pelo _selectedIndex no build
         },
         type: BottomNavigationBarType.fixed,
         backgroundColor: Colors.white,
@@ -1118,23 +1116,6 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Constrói a tela de viagens (placeholder)
   Widget _buildTripsScreen() {
     return const TripHistoryScreen();
-  }
-
-  /// Exibe diálogo de "Em breve"
-  void _showComingSoonDialog(String feature) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(feature),
-        content: const Text('Esta funcionalidade estará disponível em breve!'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
   }
 
   /// Exibe detalhes de uma carona

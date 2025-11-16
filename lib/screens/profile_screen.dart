@@ -822,27 +822,68 @@ class ProfileScreen extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: () => _handleDeleteAccount(context, authProvider),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade600,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+            const SizedBox(height: 20),
+            GestureDetector(
+              onTap: () => _handleDeleteAccount(context, authProvider),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 18),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.red.shade600, Colors.red.shade700],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.red.shade600.withValues(alpha: 0.4),
+                      blurRadius: 15,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Icon(
+                      Icons.delete_forever_rounded,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                    SizedBox(width: 12),
+                    Text(
+                      'Excluir Conta',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
               ),
             ),
-            icon: const Icon(Icons.shield_outlined),
-            label: const Text(
-              'Excluir Conta',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            'Esta ação é irreversível.',
-            style: TextStyle(fontSize: 12, color: Colors.red.shade700),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.warning_rounded,
+                  size: 16,
+                  color: Colors.red.shade700,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Esta ação é irreversível',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.red.shade700,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
           ),
         ],
       ),
