@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 /// Serviço para envio de emails
 /// Suporta múltiplos provedores:
@@ -13,28 +14,24 @@ class EmailService {
   EmailService._internal();
 
   // Configurações do provedor de email
-  // Altere para 'emailjs', 'resend', ou 'mailgun'
-  static const String provider = 'emailjs'; // Padrão: EmailJS
-  
-  // ==============================R=============================================
-  // CONFIGURAÇÕES DOS PROVEDORES
-  // ===========================================================================
-  
-  // EmailJS (https://www.emailjs.com/)
-  // Crie conta gratuita e obtenha Service ID, Template ID e User ID
-  static const String emailjsServiceId = 'service_o39negs'; // Preencha quando tiver
-  static const String emailjsTemplateId = 'template_mxa131t'; // Preencha quando tiver
-  static const String emailjsPublicKey = 'cUu6HNVsLBESEbaQP'; // Public Key (User ID)
-  // IMPORTANTE: Se o EmailJS estiver em "strict mode", você precisa de uma Private Key
-  // Acesse: Dashboard → Account → API Keys → Create Private Key
-  static const String emailjsPrivateKey = 'aYV84U__18vahrXBP2lER'; // Private Key (necessário em strict mode)
-  
-  // Resend (https://resend.com/)
-  static const String? resendApiKey = null; // Preencha quando tiver
-  
-  // Mailgun (https://www.mailgun.com/)
-  static const String? mailgunApiKey = null; // Preencha quando tiver
-  static const String? mailgunDomain = null; // Preencha quando tiver
+  // Altere via variáveis de ambiente: EMAIL_PROVIDER = 'emailjs'|'resend'|'mailgun'
+  // Em desenvolvimento, carregue variáveis com flutter_dotenv (já usado no projeto)
+  final String _provider = dotenv.env['EMAIL_PROVIDER'] ?? 'emailjs';
+
+  // ==============================CONFIGURAÇÕES POR PROVEDOR=====================
+  // EmailJS
+  final String emailjsServiceId = dotenv.env['EMAILJS_SERVICE_ID'] ?? '';
+  final String emailjsTemplateId = dotenv.env['EMAILJS_TEMPLATE_ID'] ?? '';
+  final String emailjsPublicKey = dotenv.env['EMAILJS_PUBLIC_KEY'] ?? '';
+  // Private key (não comite chaves privadas no repositório!)
+  final String emailjsPrivateKey = dotenv.env['EMAILJS_PRIVATE_KEY'] ?? '';
+
+  // Resend
+  final String? resendApiKey = dotenv.env['RESEND_API_KEY'];
+
+  // Mailgun
+  final String? mailgunApiKey = dotenv.env['MAILGUN_API_KEY'];
+  final String? mailgunDomain = dotenv.env['MAILGUN_DOMAIN'];
 
   // ===========================================================================
   // ENVIO DE EMAILS
@@ -51,7 +48,7 @@ class EmailService {
       final htmlBody = _buildActivationEmailHtml(token, userName);
       final textBody = _buildActivationEmailText(token, userName);
 
-      switch (provider) {
+      switch (_provider) {
         case 'emailjs':
           return await _sendViaEmailJS(
             toEmail: toEmail,
@@ -75,7 +72,7 @@ class EmailService {
             textBody: textBody,
           );
         default:
-          throw Exception('Provedor de email não configurado: $provider');
+          throw Exception('Provedor de email não configurado: $_provider');
       }
     } catch (e) {
       if (kDebugMode) {
@@ -97,7 +94,7 @@ class EmailService {
       final htmlBody = _buildPasswordResetEmailHtml(userName, token);
       final textBody = _buildPasswordResetEmailText(userName, token);
 
-      switch (provider) {
+      switch (_provider) {
         case 'emailjs':
           return await _sendViaEmailJS(
             toEmail: toEmail,
@@ -122,7 +119,7 @@ class EmailService {
             textBody: textBody,
           );
         default:
-          throw Exception('Provedor de email não configurado: $provider');
+          throw Exception('Provedor de email não configurado: $_provider');
       }
     } catch (e) {
       if (kDebugMode) {
