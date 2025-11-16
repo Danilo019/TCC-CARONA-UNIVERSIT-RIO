@@ -73,5 +73,12 @@
 	<string>Este app precisa acessar a galeria de fotos para escolher uma imagem de perfil</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Este app precisa salvar fotos na galeria</string>
+	
+	<!-- Permissões de localização necessárias -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Precisamos acessar sua localização enquanto você usa o app para mostrar caronas próximas e rotas.</string>
+	<!-- Adicione a chave abaixo somente se o app realmente precisar de localização em background -->
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Se permitido, usaremos sua localização para fornecer atualizações de localização mesmo quando o app estiver em segundo plano (opcional).</string>
 </dict>
 </plist>

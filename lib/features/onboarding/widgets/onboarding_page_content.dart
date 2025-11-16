@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../models/onboarding_page_model.dart';
+import 'page_indicator.dart';
 import 'wave_clipper.dart';
 
 /// Widget que renderiza o conteúdo de uma página individual do onboarding
@@ -12,25 +13,35 @@ class OnboardingPageContent extends StatelessWidget {
   /// Modelo de dados da página
   final OnboardingPageModel page;
 
+  /// Índice atual da página (para o indicador)
+  final int? currentPage;
+
+  /// Número total de páginas (para o indicador)
+  final int? pageCount;
+
   /// Altura proporcional da seção de ilustração (0.0 a 1.0)
   final double illustrationHeightRatio;
 
   const OnboardingPageContent({
     super.key,
     required this.page,
+    this.currentPage,
+    this.pageCount,
     this.illustrationHeightRatio = 0.45,
   });
 
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
-    final illustrationHeight = screenHeight * illustrationHeightRatio;
+    // Calcula altura da ilustração e aplica limites para evitar overflow em telas pequenas
+    final rawIllustrationHeight = screenHeight * illustrationHeightRatio;
+  final illustrationHeight = rawIllustrationHeight.clamp(160.0, screenHeight * 0.6);
 
     return Column(
       children: [
         // Seção Superior: Ilustração
         _buildIllustrationSection(illustrationHeight),
-        
+
         // Seção Inferior: Painel Informativo com Gradiente
         Expanded(
           child: _buildInfoPanel(context),
@@ -47,18 +58,21 @@ class OnboardingPageContent extends StatelessWidget {
       color: AppColors.white,
       child: Center(
         child: Padding(
-          padding: const EdgeInsets.all(32.0),
-          child: Image.asset(
-            page.imagePath,
-            fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) {
-              // Fallback caso a imagem não seja encontrada
-              return Icon(
-                Icons.directions_car,
-                size: 120,
-                color: AppColors.oceanMediumBlue,
-              );
-            },
+          padding: const EdgeInsets.all(24.0),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: height - 16),
+            child: Image.asset(
+              page.imagePath,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) {
+                // Fallback caso a imagem não seja encontrada
+                return Icon(
+                  Icons.directions_car,
+                  size: 120,
+                  color: AppColors.oceanMediumBlue,
+                );
+              },
+            ),
           ),
         ),
       ),
@@ -77,8 +91,10 @@ class OnboardingPageContent extends StatelessWidget {
         decoration: const BoxDecoration(
           gradient: AppColors.onboardingGradient,
         ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 60, 24, 40),
+      child: Padding(
+        // Aumenta o padding inferior para evitar que os controles (posição bottom)
+        // sobreponham o conteúdo informativo nas telas menores.
+        padding: const EdgeInsets.fromLTRB(24, 60, 24, 120),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -107,6 +123,15 @@ class OnboardingPageContent extends StatelessWidget {
                 ),
                 textAlign: TextAlign.center,
               ),
+
+              const SizedBox(height: 24),
+
+              // Indicador de página posicionado abaixo do texto
+              if (currentPage != null && pageCount != null)
+                PageIndicator(
+                  pageCount: pageCount!,
+                  currentPage: currentPage!,
+                ),
             ],
           ),
         ),
@@ -138,19 +163,21 @@ class CompactOnboardingPageContent extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                // Ilustração compacta
-                SizedBox(
-                  height: 200,
-                  child: Image.asset(
-                    page.imagePath,
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Icon(
-                        Icons.directions_car,
-                        size: 80,
-                        color: AppColors.white,
-                      );
-                    },
+                // Ilustração compacta (usa constraints para evitar overflow)
+                Flexible(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 200),
+                    child: Image.asset(
+                      page.imagePath,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Icon(
+                          Icons.directions_car,
+                          size: 80,
+                          color: AppColors.white,
+                        );
+                      },
+                    ),
                   ),
                 ),
                 

@@ -36,19 +36,22 @@ class OnboardingData {
       title: 'Bem-vindo à Carona Universitária!',
       description:
           'Conecte-se com colegas da sua universidade e compartilhe caronas de forma segura, prática e econômica. Sua jornada acadêmica começa aqui!',
-      imagePath: 'assets/images/background_android.png',
+      // imagem mais representativa de pessoas/companheirismo
+      imagePath: 'assets/images/friendship.png',
     ),
     OnboardingPageModel(
       title: 'Ofereça ou Encontre Caronas',
       description:
           'Publique sua rota diária ou encontre caronas disponíveis na sua região. Combine horários, locais de encontro e torne seu trajeto mais agradável.',
-      imagePath: 'assets/images/message_illustration.png',
+      // ilustração de mensagem/fluxo de comunicação
+      imagePath: 'assets/images/univer.png',
     ),
     OnboardingPageModel(
       title: 'Economize e Faça a Diferença',
       description:
           'Divida os custos da viagem, reduza o trânsito e contribua para um planeta mais sustentável. Juntos, fazemos a diferença!',
-      imagePath: 'assets/images/logo_carona_universitária.png',
+      // logo para reforçar a marca na última página
+      imagePath: 'assets/images/carona01.png',
     ),
   ];
 

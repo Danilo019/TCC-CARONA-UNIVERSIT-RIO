@@ -238,14 +238,21 @@ class _LocationRequestScreenState extends State<LocationRequestScreen>
 
   /// Solicita permissão de localização
   void _requestLocationPermission() async {
+    final locationService = LocationService();
+
+    // Se ainda não temos permissão, mostrar uma breve explicação (rationale)
+    final alreadyGranted = await locationService.hasLocationPermission();
+    if (!alreadyGranted) {
+      final proceed = await _showPermissionRationale();
+      if (!proceed) return;
+    }
+
     _showLoadingDialog();
 
     try {
-      final locationService = LocationService();
-      
       // Verifica se o serviço de localização está habilitado
       final isEnabled = await locationService.isLocationServiceEnabled();
-      
+
       if (!isEnabled) {
         if (mounted) {
           Navigator.of(context).pop(); // Fecha o diálogo
@@ -263,7 +270,7 @@ class _LocationRequestScreenState extends State<LocationRequestScreen>
         if (granted) {
           // Tenta obter localização atual para validar
           final position = await locationService.getCurrentLocation();
-          
+
           if (position != null) {
             if (kDebugMode) {
               print('✓ Localização obtida com sucesso: ${position.latitude}, ${position.longitude}');
@@ -275,7 +282,7 @@ class _LocationRequestScreenState extends State<LocationRequestScreen>
         } else {
           // Verifica se foi negada permanentemente
           final hasPermission = await locationService.hasLocationPermission();
-          
+
           if (!hasPermission) {
             _showPermissionDeniedDialog();
           } else {
@@ -287,12 +294,35 @@ class _LocationRequestScreenState extends State<LocationRequestScreen>
       if (kDebugMode) {
         print('✗ Erro ao solicitar permissão: $e');
       }
-      
+
       if (mounted) {
         Navigator.of(context).pop(); // Fecha o diálogo
         _showErrorDialog('Erro ao solicitar permissão de localização');
       }
     }
+  }
+
+  /// Mostra um diálogo explicando porque o app precisa da permissão
+  Future<bool> _showPermissionRationale() async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Permissão de Localização'),
+            content: const Text(
+                'Para encontrar caronas próximas e oferecer rotas precisas, precisamos acessar sua localização. Deseja permitir agora?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Permitir'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
   }
 
   /// Pula a solicitação de localização

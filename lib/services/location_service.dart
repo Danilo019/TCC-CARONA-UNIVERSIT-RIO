@@ -87,6 +87,15 @@ class LocationService {
   /// Abre as configurações do app para o usuário habilitar a permissão
   Future<bool> openLocationSettings() async {
     try {
+      // Primeiro tenta abrir as configurações de localização do sistema
+      try {
+        final opened = await Geolocator.openLocationSettings();
+        if (opened) return true;
+      } catch (_) {
+        // Ignora e tenta abrir as configurações do app
+      }
+
+      // Fallback: abre as configurações do app
       return await openAppSettings();
     } catch (e) {
       if (kDebugMode) {

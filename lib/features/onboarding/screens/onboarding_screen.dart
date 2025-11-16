@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../models/onboarding_page_model.dart';
 import '../widgets/onboarding_page_content.dart';
-import '../widgets/page_indicator.dart';
 
 /// Tela principal do fluxo de Onboarding
 /// 
@@ -78,6 +77,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               itemBuilder: (context, index) {
                 return OnboardingPageContent(
                   page: OnboardingData.getPage(index),
+                  currentPage: _currentPage,
+                  pageCount: OnboardingData.pageCount,
                 );
               },
             ),
@@ -102,14 +103,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Indicador de página
-          PageIndicator(
-            pageCount: OnboardingData.pageCount,
-            currentPage: _currentPage,
-          ),
-
-          const SizedBox(height: 32),
-
           // Botões de navegação
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -268,6 +261,8 @@ class _AnimatedOnboardingScreenState extends State<AnimatedOnboardingScreen>
                   opacity: _animationController,
                   child: OnboardingPageContent(
                     page: OnboardingData.getPage(index),
+                    currentPage: _currentPage,
+                    pageCount: OnboardingData.pageCount,
                   ),
                 );
               },
@@ -276,56 +271,47 @@ class _AnimatedOnboardingScreenState extends State<AnimatedOnboardingScreen>
               left: 0,
               right: 0,
               bottom: 32,
-              child: Column(
-                children: [
-                  PageIndicator(
-                    pageCount: OnboardingData.pageCount,
-                    currentPage: _currentPage,
-                  ),
-                  const SizedBox(height: 24),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        if (_currentPage < OnboardingData.pageCount - 1)
-                          TextButton(
-                            onPressed: _finishOnboarding,
-                            child: const Text('Pular',
-                                style: TextStyle(color: AppColors.white)),
-                          )
-                        else
-                          const SizedBox(width: 80),
-                        ElevatedButton(
-                          onPressed: () {
-                            if (_currentPage < OnboardingData.pageCount - 1) {
-                              _pageController.nextPage(
-                                duration: const Duration(milliseconds: 400),
-                                curve: Curves.easeInOut,
-                              );
-                            } else {
-                              _finishOnboarding();
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.accentOrange,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 32, vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(30),
-                            ),
-                          ),
-                          child: Text(
-                            _currentPage == OnboardingData.pageCount - 1
-                                ? 'Começar'
-                                : 'Avançar',
-                            style: const TextStyle(color: AppColors.white),
-                          ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    if (_currentPage < OnboardingData.pageCount - 1)
+                      TextButton(
+                        onPressed: _finishOnboarding,
+                        child: const Text('Pular',
+                            style: TextStyle(color: AppColors.white)),
+                      )
+                    else
+                      const SizedBox(width: 80),
+                    ElevatedButton(
+                      onPressed: () {
+                        if (_currentPage < OnboardingData.pageCount - 1) {
+                          _pageController.nextPage(
+                            duration: const Duration(milliseconds: 400),
+                            curve: Curves.easeInOut,
+                          );
+                        } else {
+                          _finishOnboarding();
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.accentOrange,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 32, vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(30),
                         ),
-                      ],
+                      ),
+                      child: Text(
+                        _currentPage == OnboardingData.pageCount - 1
+                            ? 'Começar'
+                            : 'Avançar',
+                        style: const TextStyle(color: AppColors.white),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ],
