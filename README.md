@@ -190,11 +190,11 @@ Este projeto está licenciado sob os termos do arquivo `LICENSE`.
 
 ## 🎓 Instituição
 
-**Universidade do Distrito Federal (UDF)**
-
+<p align="center"><strong>Universidade do Distrito Federal (UDF)</strong></p>
+****
 ---
 
-<div align="center">
+<p align="center">
   <strong>Mobilidade acadêmica consciente</strong><br/>
   Feito com ❤️ usando Flutter
-</div>
+</p>********
