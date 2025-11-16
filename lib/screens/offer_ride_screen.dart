@@ -1243,7 +1243,7 @@ class _OfferRideScreenState extends State<OfferRideScreen>
         const SnackBar(
           content: Text(
             'Para iniciar a viagem é necessário ter ao menos um passageiro confirmado '
-            'e aguardar a janela de ${_startRideLeadTimeMinutes} minutos antes da partida.',
+            'e aguardar a janela de $_startRideLeadTimeMinutes minutos antes da partida.',
           ),
           backgroundColor: Colors.orange,
         ),
@@ -2232,7 +2232,7 @@ class _OfferRideScreenState extends State<OfferRideScreen>
                         backgroundColor: Colors.blue.shade50,
                         foregroundColor: Colors.blue.shade700,
                         title:
-                            'Botão disponível ${_startRideLeadTimeMinutes} minutos antes',
+                            'Botão disponível $_startRideLeadTimeMinutes minutos antes',
                         subtitle:
                             'Ele aparecerá por volta das ${DateFormat('HH:mm').format(_startButtonAvailableAt(ride))} '
                             '(${_minutesUntilStartWindow(ride)} min restantes).',
