@@ -202,8 +202,8 @@ class _SimpleSplashScreenState extends State<SimpleSplashScreen> {
   void initState() {
     super.initState();
     
-    // Navegar para onboarding após 2 segundos
-    Timer(const Duration(seconds: 2), () {
+    // Navegar para onboarding após 3 segundos
+    Timer(const Duration(seconds: 3), () {
       if (mounted) {
         Navigator.of(context).pushReplacementNamed('/onboarding');
       }
