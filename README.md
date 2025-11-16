@@ -1,9 +1,9 @@
 # Carona Universitária UDF 🚗
 
-<div align="center">
+<div align="**center**">
   <img src="assets/images/logo_carona_universitária.png" alt="Logo Carona Universitária" width="120"/>
   <br><br>
-
+****
 
 ## 📋 Sobre o Projeto
 
