@@ -21,6 +21,10 @@ class OnboardingPageModel {
     required this.imagePath,
     this.accentColor,
   });
+  @override
+  String toString() {
+    return 'OnboardingPageModel(title: $title, description: $description, imagePath: $imagePath, accentColor: $accentColor)';
+  }
 }
 
 /// Lista de páginas do onboarding do aplicativo Carona Uni
@@ -29,10 +33,10 @@ class OnboardingData {
 
   static const List<OnboardingPageModel> pages = [
     OnboardingPageModel(
-      title: 'Bem-vindo à Carona Uni!',
+      title: 'Bem-vindo à Carona Universitária!',
       description:
           'Conecte-se com colegas da sua universidade e compartilhe caronas de forma segura, prática e econômica. Sua jornada acadêmica começa aqui!',
-      imagePath: 'assets/images/friendship.png',
+      imagePath: 'assets/images/background_android.png',
     ),
     OnboardingPageModel(
       title: 'Ofereça ou Encontre Caronas',

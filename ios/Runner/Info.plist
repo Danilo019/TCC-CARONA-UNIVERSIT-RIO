@@ -62,6 +62,16 @@
 	<array>
 		<string>msauthv2</string>
 		<string>msauthv3</string>
+		<string>waze</string>
+		<string>comgooglemaps</string>
 	</array>
+	
+	<!-- Permissões para câmera e galeria (image_picker) -->
+	<key>NSCameraUsageDescription</key>
+	<string>Este app precisa acessar a câmera para adicionar foto de perfil</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Este app precisa acessar a galeria de fotos para escolher uma imagem de perfil</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Este app precisa salvar fotos na galeria</string>
 </dict>
 </plist>

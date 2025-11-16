@@ -1,0 +1,253 @@
+rules_version = "2";
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ============================================================================
+    // FUNÇÕES AUXILIARES
+    // ============================================================================
+    
+    // Verifica se o usuário está autenticado
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Verifica se o email é da UDF
+    function isUDFEmail(email) {
+      return email.matches('.*@cs\\.udf\\.edu\\.br$');
+    }
+    
+    // Valida estrutura de dados de um token
+    function isValidTokenData() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['token', 'email', 'createdAt', 'expiresAt', 'isUsed']) &&
+             data.token is string &&
+             data.token.size() == 6 &&
+             data.token.matches('^[0-9]{6}$') &&
+             data.email is string &&
+             isUDFEmail(data.email) &&
+             data.createdAt is timestamp &&
+             data.expiresAt is timestamp &&
+             data.isUsed is bool &&
+             data.expiresAt > data.createdAt;
+    }
+    
+    // Verifica se o token não está expirado
+    function isTokenNotExpired() {
+      return resource.data.expiresAt > request.time;
+    }
+    
+    // Valida estrutura de dados de uma carona
+    function isValidRideData() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['driverId', 'driverName', 'origin', 'destination', 'dateTime', 'maxSeats', 'availableSeats', 'status', 'createdAt']) &&
+             data.driverId is string &&
+             data.driverName is string &&
+             data.maxSeats is int &&
+             data.maxSeats > 0 &&
+             data.maxSeats <= 10 &&
+             data.availableSeats is int &&
+             data.availableSeats >= 0 &&
+             data.availableSeats <= data.maxSeats &&
+             data.status is string &&
+             data.status in ['active', 'in_progress', 'completed', 'cancelled'];
+    }
+    
+    // Valida estrutura de dados de uma solicitação de carona
+    function isValidRideRequestData() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['rideId', 'passengerId', 'passengerName', 'status', 'createdAt']) &&
+             data.rideId is string &&
+             data.passengerId is string &&
+             data.passengerName is string &&
+             data.status is string &&
+             data.status in ['pending', 'accepted', 'rejected', 'cancelled'];
+    }
+    
+    // Valida estrutura de dados de consentimento LGPD
+    function isValidConsentData() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['userId', 'email', 'consentType', 'accepted', 'version', 'acceptedAt']) &&
+             data.userId is string &&
+             data.email is string &&
+             isUDFEmail(data.email) &&
+             data.consentType is string &&
+             data.consentType in ['privacy_policy', 'terms_of_service', 'data_processing'] &&
+             data.accepted is bool &&
+             data.version is string &&
+             data.acceptedAt is timestamp;
+    }
+    
+    // ============================================================================
+    // CARONAS (RIDES)
+    // ============================================================================
+    
+    match /rides/{rideId} {
+      // Permite leitura para usuários autenticados
+      allow read: if isAuthenticated();
+      
+      // Permite criar apenas se for o motorista e dados válidos
+      allow create: if isAuthenticated() && 
+                       request.resource.data.driverId == request.auth.uid &&
+                       isValidRideData();
+      
+      // Permite atualizar apenas se for o motorista
+      allow update: if isAuthenticated() && 
+                       resource.data.driverId == request.auth.uid &&
+                       isValidRideData();
+      
+      // Permite deletar apenas se for o motorista
+      allow delete: if isAuthenticated() && 
+                       resource.data.driverId == request.auth.uid;
+    }
+    
+    // ============================================================================
+    // SOLICITAÇÕES DE CARONA (RIDE REQUESTS)
+    // ============================================================================
+    
+    match /ride_requests/{requestId} {
+      // Permite leitura para usuários autenticados
+      // Mas só permite ler solicitações próprias ou da carona do motorista
+      allow read: if isAuthenticated() && 
+                     (resource.data.passengerId == request.auth.uid ||
+                      (resource.data.rideId != null && 
+                       exists(/databases/$(database)/documents/rides/$(resource.data.rideId)) &&
+                       get(/databases/$(database)/documents/rides/$(resource.data.rideId)).data.driverId == request.auth.uid));
+      
+      // Permite criar apenas se for o passageiro e dados válidos
+      allow create: if isAuthenticated() && 
+                       request.resource.data.passengerId == request.auth.uid && 
+                       request.resource.data.rideId != null &&
+                       isValidRideRequestData();
+      
+      // Permite atualizar apenas se for o motorista da carona ou o próprio passageiro
+      allow update: if isAuthenticated() && 
+                       isValidRideRequestData() &&
+                       ((resource.data.rideId != null && 
+                         exists(/databases/$(database)/documents/rides/$(resource.data.rideId)) && 
+                         get(/databases/$(database)/documents/rides/$(resource.data.rideId)).data.driverId == request.auth.uid) || 
+                        resource.data.passengerId == request.auth.uid);
+      
+      // Permite deletar apenas se for o passageiro ou o motorista da carona
+      allow delete: if isAuthenticated() && 
+                       (resource.data.passengerId == request.auth.uid || 
+                        (resource.data.rideId != null && 
+                         exists(/databases/$(database)/documents/rides/$(resource.data.rideId)) && 
+                         get(/databases/$(database)/documents/rides/$(resource.data.rideId)).data.driverId == request.auth.uid));
+    }
+    
+    // NOTA: chat_messages agora usa Realtime Database para melhor performance em tempo real
+    
+    // ============================================================================
+    // VEÍCULOS (VEHICLES)
+    // ============================================================================
+    
+    match /vehicles/{vehicleId} {
+      function isVehicleOwner() {
+        return resource.data.driverId == request.auth.uid ||
+               resource.data.ownerId == request.auth.uid;
+      }
+
+      function isCreatingAsVehicleOwner() {
+        return request.resource.data.driverId == request.auth.uid ||
+               request.resource.data.ownerId == request.auth.uid;
+      }
+
+      // Permite leitura apenas para o dono
+      allow read: if isAuthenticated() && isVehicleOwner();
+      
+      // Permite criar apenas se for o dono
+      allow create: if isAuthenticated() && isCreatingAsVehicleOwner();
+      
+      // Permite atualizar apenas se for o dono
+      allow update: if isAuthenticated() && isVehicleOwner();
+      
+      // Permite deletar apenas se for o dono
+      allow delete: if isAuthenticated() && isVehicleOwner();
+    }
+    
+    // ============================================================================
+    // TOKENS DE AUTENTICAÇÃO (AUTH_TOKENS) - Legado
+    // ============================================================================
+    
+    match /auth_tokens/{tokenId} {
+      // Permite leitura apenas para usuários autenticados
+      allow read: if isAuthenticated();
+      
+      // Não permite escrita (apenas leitura)
+      allow write: if false;
+    }
+    
+    // ============================================================================
+    // TOKENS DE ATIVAÇÃO E RESET DE SENHA (ACTIVATION_TOKENS)
+    // ============================================================================
+    // SEGURANÇA MELHORADA: Restringe leitura para prevenir enumeração de tokens
+    
+    match /activationTokens/{tokenId} {
+      // Permite criar tokens sem autenticação (necessário para cadastro/reset)
+      // Mas valida estrutura e email UDF
+      allow create: if isValidTokenData() &&
+                       request.resource.data.email is string &&
+                       isUDFEmail(request.resource.data.email);
+      
+      // Bloqueia qualquer leitura diretamente do cliente.
+      // A validação passa a ser feita via Cloud Functions/Admin SDK.
+      allow get: if false;
+      allow list: if false;
+      
+      // Clientes não podem atualizar ou remover tokens diretamente.
+      // Apenas o backend (Admin SDK) realizará essas operações.
+      allow update: if false;
+      allow delete: if false;
+    }
+    
+    // ============================================================================
+    // USUÁRIOS (USERS)
+    // ============================================================================
+    
+    match /users/{userId} {
+      // Permite leitura para usuários autenticados
+      allow read: if isAuthenticated();
+      
+      // Permite criar apenas para o próprio usuário
+      allow create: if isAuthenticated() && 
+                       userId == request.auth.uid;
+      
+      // Permite atualizar apenas para o próprio usuário
+      allow update: if isAuthenticated() && 
+                       userId == request.auth.uid;
+      
+      // Permite deletar apenas para o próprio usuário
+      allow delete: if isAuthenticated() && 
+                       userId == request.auth.uid;
+    }
+    
+    // ============================================================================
+    // CONSENTIMENTOS LGPD (CONSENTS)
+    // ============================================================================
+    
+    match /consents/{consentId} {
+      // Permite leitura apenas para o próprio usuário (para consultar seus consentimentos)
+      allow read: if isAuthenticated() && 
+                     resource.data.userId == request.auth.uid;
+      
+      // Permite criar consentimento apenas para o próprio usuário
+      // Valida que userId do consentimento corresponde ao usuário autenticado
+      allow create: if isAuthenticated() && 
+                       request.resource.data.userId == request.auth.uid &&
+                       isValidConsentData();
+      
+      // Permite atualizar apenas para o próprio usuário
+      // Mas não permite alterar userId, email ou acceptedAt (para manter histórico)
+      allow update: if isAuthenticated() && 
+                       resource.data.userId == request.auth.uid &&
+                       request.resource.data.userId == resource.data.userId &&
+                       request.resource.data.email == resource.data.email &&
+                       request.resource.data.acceptedAt == resource.data.acceptedAt &&
+                       isValidConsentData();
+      
+      // Permite deletar apenas para o próprio usuário (direito de revogação LGPD)
+      allow delete: if isAuthenticated() && 
+                       resource.data.userId == request.auth.uid;
+    }
+  }
+}

@@ -22,6 +22,19 @@ subprojects {
 }
 subprojects {
     project.evaluationDependsOn(":app")
+    
+    // Configura Java 17 para todos os subprojetos e suprime avisos de Java 8
+    tasks.withType<JavaCompile> {
+        options.compilerArgs.add("-Xlint:-options")
+        sourceCompatibility = "17"
+        targetCompatibility = "17"
+    }
+    
+    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
+        kotlinOptions {
+            jvmTarget = "17"
+        }
+    }
 }
 
 tasks.register<Delete>("clean") {

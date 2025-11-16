@@ -15,6 +15,7 @@ app.use(express.json());
 
 // Inicializa Firebase Admin SDK
 // IMPORTANTE: Configure FIREBASE_SERVICE_ACCOUNT como variável de ambiente
+// ou use um arquivo de credenciais
 let firebaseInitialized = false;
 
 try {
@@ -119,7 +120,6 @@ app.post('/api/reset-password', async (req, res) => {
         message: 'Token já foi usado',
       });
     }
-
     // Verifica expiração
     const expiresAt = tokenData.expiresAt.toMillis();
     if (Date.now() > expiresAt) {
@@ -129,7 +129,6 @@ app.post('/api/reset-password', async (req, res) => {
         message: 'Token expirado. Solicite um novo código.',
       });
     }
-
     // 3. Busca usuário no Firebase Auth
     let user;
     try {

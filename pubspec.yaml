@@ -19,18 +19,37 @@ dependencies:
   # Firebase - versões atualizadas para compatibilidade
   firebase_core: ^3.6.0
   firebase_auth: ^5.3.1
-  
-  # Microsoft Authentication (alternativa - usar aad_oauth)
-  aad_oauth: ^1.0.1
+  cloud_firestore: ^5.5.1
+  firebase_database: ^11.3.10
+  firebase_storage: ^12.3.4
+  cloud_functions: ^5.1.1
   
   # Provider para gerenciamento de estado
   provider: ^6.1.1
+
+  # Notificações
+  firebase_messaging: ^15.1.2
+  flutter_local_notifications: ^17.2.4
+  timezone: ^0.9.3
+
+  # Exportação e compartilhamento de dados
+  path_provider: ^2.1.4
+  share_plus: ^10.1.2
   
-  # URL Launcher (necessário para Microsoft Auth)
-  url_launcher: ^6.2.1
+  # Armazenamento local
+  shared_preferences: ^2.3.3
   
-  # permission_handler: ^11.3.1
-  # google_maps_flutter: ^2.10.0
+  # Formatação de datas
+  intl: ^0.19.0
+  
+  # Geolocalização e Mapa
+  geolocator: ^13.0.1
+  permission_handler: ^11.3.1
+  google_maps_flutter: ^2.10.0
+  url_launcher: ^6.3.1
+  
+  # Variáveis de ambiente
+  flutter_dotenv: ^5.1.0
 
 dev_dependencies:
   flutter_test:
@@ -43,6 +62,7 @@ flutter:
 
   assets:
     - assets/images/
+    - .env #variáveis de ambiente
 
   fonts:
     - family: NotoSerif

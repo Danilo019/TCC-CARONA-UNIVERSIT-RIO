@@ -44,3 +44,9 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 .env
+.env.example #exemplo de variáveis de ambiente
+
+# Keystore e credenciais (NÃO COMITAR)
+android/key.properties
+*.keystore
+*.jks

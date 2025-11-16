@@ -1,0 +1,28 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "chat_messages": {
+      ".read": "auth != null",
+      ".write": "auth != null && (!data.exists() || data.child('senderId').val() == auth.uid)",
+      "$messageId": {
+        ".validate": "newData.child('senderId').val() == auth.uid && newData.hasChildren(['rideId', 'senderId', 'senderName', 'message', 'isDriver', 'timestamp'])",
+        "timestamp": {
+        ".validate": "newData.isNumber()"
+        }
+      },
+      ".indexOn": ["rideId", "timestamp"]
+    },
+    "chat_read": {
+      "$rideId": {
+        "$userId": {
+          ".read": "auth != null && auth.uid == $userId",
+          ".write": "auth != null && auth.uid == $userId",
+          "lastReadTimestamp": {
+            ".validate": "newData.isNumber()"
+          }
+        }
+      }
+    }
+  }
+}

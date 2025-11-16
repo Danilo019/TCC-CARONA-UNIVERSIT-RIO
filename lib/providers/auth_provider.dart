@@ -1,19 +1,19 @@
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
+import '../services/session_service.dart';
 import '../models/auth_user.dart';
+import '../services/notification_service.dart';
+import '../services/firestore_service.dart';
 
-enum AuthStatus {
-  initial,
-  loading,
-  authenticated,
-  unauthenticated,
-  error,
-}
+enum AuthStatus { initial, loading, authenticated, unauthenticated, error }
 
 class AuthProvider with ChangeNotifier {
   final AuthService _authService = AuthService();
-  
+  final SessionService _sessionService = SessionService();
+  final NotificationService _notificationService = NotificationService();
+  final FirestoreService _firestoreService = FirestoreService();
+
   AuthStatus _status = AuthStatus.initial;
   AuthUser? _user;
   String? _errorMessage;
@@ -22,7 +22,8 @@ class AuthProvider with ChangeNotifier {
   AuthStatus get status => _status;
   AuthUser? get user => _user;
   String? get errorMessage => _errorMessage;
-  bool get isAuthenticated => _status == AuthStatus.authenticated && _user != null;
+  bool get isAuthenticated =>
+      _status == AuthStatus.authenticated && _user != null;
   bool get isLoading => _status == AuthStatus.loading;
 
   AuthProvider() {
@@ -33,52 +34,52 @@ class AuthProvider with ChangeNotifier {
   Future<void> _initializeAuth() async {
     try {
       _setStatus(AuthStatus.loading);
-      
+
       await _authService.initialize();
-      
+
+      // Verifica se já existe um usuário autenticado
+      final currentUser = _authService.currentUser;
+      if (currentUser != null) {
+        await _loadUserData(currentUser);
+        _setStatus(AuthStatus.authenticated);
+
+        // Salva sessão persistentemente
+        await _sessionService.saveSession(
+          userId: currentUser.uid,
+          email: currentUser.email ?? '',
+        );
+
+        await _notificationService.syncPreferencesForUser(_user);
+      } else {
+        _setStatus(AuthStatus.unauthenticated);
+      }
+
       // Escuta mudanças no estado de autenticação
       _authService.authStateChanges.listen(_onAuthStateChanged);
-      
     } catch (e) {
       _setError('Erro ao inicializar autenticação: $e');
     }
   }
 
   /// Callback para mudanças no estado de autenticação
-  void _onAuthStateChanged(User? firebaseUser) {
+  void _onAuthStateChanged(User? firebaseUser) async {
     if (firebaseUser != null) {
-      _user = AuthUser.fromFirebaseUser(firebaseUser);
+      await _loadUserData(firebaseUser);
       _setStatus(AuthStatus.authenticated);
+
+      // Salva sessão persistentemente
+      await _sessionService.saveSession(
+        userId: firebaseUser.uid,
+        email: firebaseUser.email ?? '',
+      );
+
+      await _notificationService.syncPreferencesForUser(_user);
     } else {
       _user = null;
       _setStatus(AuthStatus.unauthenticated);
-    }
-  }
 
-  /// Realiza login com Microsoft
-  Future<bool> signInWithMicrosoft() async {
-    try {
-      _setStatus(AuthStatus.loading);
-      _clearError();
-
-      final firebaseUser = await _authService.signInWithUDFMicrosoft();
-      
-      if (firebaseUser != null) {
-        _user = AuthUser.fromFirebaseUser(firebaseUser);
-        _setStatus(AuthStatus.authenticated);
-        
-        if (kDebugMode) {
-          print('Login realizado com sucesso: ${_user?.email}');
-        }
-        
-        return true;
-      } else {
-        _setError('Falha no login');
-        return false;
-      }
-    } catch (e) {
-      _setError('Erro no login: $e');
-      return false;
+      // Limpa sessão
+      await _sessionService.clearSession();
     }
   }
 
@@ -88,11 +89,13 @@ class AuthProvider with ChangeNotifier {
       _setStatus(AuthStatus.loading);
       _clearError();
 
+      final userId = _user?.uid;
+      await _notificationService.clearDeviceState(userId);
       await _authService.signOut();
-      
+
       _user = null;
       _setStatus(AuthStatus.unauthenticated);
-      
+
       if (kDebugMode) {
         print('Logout realizado com sucesso');
       }
@@ -113,11 +116,43 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
+  /// Exclui completamente a conta do usuário (Direito ao Esquecimento)
+  Future<void> deleteAccount() async {
+    try {
+      if (_user == null) {
+        _setError('Nenhum usuário autenticado para exclusão');
+        return;
+      }
+
+      _setStatus(AuthStatus.loading);
+      _clearError();
+
+      final deleted = await _authService.deleteAccount();
+
+      if (!deleted) {
+        _setError(
+          'Não foi possível excluir a conta. Tente novamente mais tarde.',
+        );
+        return;
+      }
+
+      await _sessionService.clearSession();
+      _user = null;
+      _setStatus(AuthStatus.unauthenticated);
+    } catch (e) {
+      final message = e is Exception
+          ? e.toString().replaceFirst('Exception: ', '')
+          : '$e';
+      _setError('Erro ao excluir conta: $message');
+      rethrow;
+    }
+  }
+
   /// Verifica se o usuário está autenticado
   Future<bool> checkAuthStatus() async {
     try {
       final isAuth = await _authService.isAuthenticated();
-      
+
       if (isAuth && _user == null) {
         // Se está autenticado mas não temos dados do usuário, atualiza
         final firebaseUser = _authService.currentUser;
@@ -126,7 +161,7 @@ class AuthProvider with ChangeNotifier {
           _setStatus(AuthStatus.authenticated);
         }
       }
-      
+
       return isAuth;
     } catch (e) {
       _setError('Erro ao verificar status: $e');
@@ -138,7 +173,7 @@ class AuthProvider with ChangeNotifier {
   Future<void> refreshToken() async {
     try {
       await _authService.refreshToken();
-      
+
       // Atualiza dados do usuário
       final firebaseUser = _authService.currentUser;
       if (firebaseUser != null) {
@@ -148,6 +183,45 @@ class AuthProvider with ChangeNotifier {
     } catch (e) {
       _setError('Erro ao refresh token: $e');
     }
+  }
+
+  /// Recarrega dados do usuário (útil após verificar email)
+  Future<void> refreshUser() async {
+    try {
+      await _authService.reloadUser();
+
+      // Atualiza dados do usuário
+      final firebaseUser = _authService.currentUser;
+      if (firebaseUser != null) {
+        _user = AuthUser.fromFirebaseUser(firebaseUser);
+        notifyListeners();
+      }
+    } catch (e) {
+      _setError('Erro ao recarregar usuário: $e');
+    }
+  }
+
+  Future<void> _loadUserData(User firebaseUser) async {
+    final baseUser = AuthUser.fromFirebaseUser(firebaseUser);
+    try {
+      final firestoreUser = await _firestoreService.getUser(firebaseUser.uid);
+      if (firestoreUser != null) {
+        _user = baseUser.copyWith(
+          displayName: firestoreUser.displayName ?? baseUser.displayName,
+          photoURL: firestoreUser.photoURL ?? baseUser.photoURL,
+          emailVerified: firestoreUser.emailVerified,
+          creationTime: firestoreUser.creationTime ?? baseUser.creationTime,
+          lastSignInTime:
+              firestoreUser.lastSignInTime ?? baseUser.lastSignInTime,
+        );
+        return;
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('⚠ Falha ao carregar dados extras do usuário no Firestore: $e');
+      }
+    }
+    _user = baseUser;
   }
 
   /// Define o status e notifica listeners
@@ -161,7 +235,7 @@ class AuthProvider with ChangeNotifier {
     _errorMessage = error;
     _status = AuthStatus.error;
     notifyListeners();
-    
+
     if (kDebugMode) {
       print('AuthProvider Error: $error');
     }
@@ -187,5 +261,4 @@ class AuthProvider with ChangeNotifier {
   bool isUDFEmail(String email) {
     return _authService.isUDFEmail(email);
   }
-
 }
