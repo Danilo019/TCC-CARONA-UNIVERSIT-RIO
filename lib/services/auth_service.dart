@@ -1,3 +1,6 @@
+// Serviço de autenticação - gerencia login, cadastro, reset de senha e validação de tokens
+// Integra Firebase Auth com Cloud Functions para operações seguras
+
 import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -9,6 +12,7 @@ import 'firestore_service.dart';
 import 'account_deletion_service.dart';
 import '../models/auth_user.dart';
 
+// Classe singleton que centraliza todas as operações de autenticação do sistema
 class AuthService {
   static final AuthService _instance = AuthService._internal();
   factory AuthService() => _instance;

@@ -1,3 +1,6 @@
+// Tela de busca de caronas - permite filtrar e visualizar caronas disponíveis
+// Suporta filtros por localização, data e busca textual
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
@@ -12,13 +15,14 @@ import '../components/map_widget.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 
-/// Tela para procurar e visualizar caronas disponíveis
+// Widget stateful que gerencia busca e exibição de caronas
+// Alterna entre visualização em lista e mapa
 class SearchRideScreen extends StatefulWidget {
   const SearchRideScreen({super.key});
 
   @override
   State<SearchRideScreen> createState() => _SearchRideScreenState();
-  
+
   /// Recarrega as caronas quando volta para esta tela
   static void reloadOnReturn(BuildContext context) {
     // Será chamado quando voltar de outra tela
@@ -66,16 +70,18 @@ class _SearchRideScreenState extends State<SearchRideScreen> {
       if (kDebugMode) {
         print('🔍 Buscando caronas ativas...');
       }
-      
+
       final rides = await _ridesService.getActiveRides();
-      
+
       if (kDebugMode) {
         print('✓ ${rides.length} caronas carregadas');
         for (var ride in rides) {
-          print('  - ${ride.driverName}: ${ride.origin.address ?? 'Sem endereço'} → ${ride.destination.address ?? 'Sem endereço'}');
+          print(
+            '  - ${ride.driverName}: ${ride.origin.address ?? 'Sem endereço'} → ${ride.destination.address ?? 'Sem endereço'}',
+          );
         }
       }
-      
+
       if (mounted) {
         setState(() {
           _allRides = rides;
@@ -88,7 +94,7 @@ class _SearchRideScreenState extends State<SearchRideScreen> {
         print('✗ Erro ao carregar caronas: $e');
         print('  Stack trace: $stackTrace');
       }
-      
+
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -101,7 +107,7 @@ class _SearchRideScreenState extends State<SearchRideScreen> {
   Future<void> _loadCurrentLocation() async {
     try {
       final position = await _locationService.getCurrentLocation();
-      
+
       if (position != null) {
         _userLocation = Location(
           latitude: position.latitude,
@@ -127,8 +133,8 @@ class _SearchRideScreenState extends State<SearchRideScreen> {
       filtered = filtered.where((ride) {
         final query = _searchQuery.toLowerCase();
         return ride.origin.address?.toLowerCase().contains(query) == true ||
-               ride.destination.address?.toLowerCase().contains(query) == true ||
-               ride.driverName.toLowerCase().contains(query);
+            ride.destination.address?.toLowerCase().contains(query) == true ||
+            ride.driverName.toLowerCase().contains(query);
       }).toList();
     }
 
@@ -143,16 +149,16 @@ class _SearchRideScreenState extends State<SearchRideScreen> {
       final today = DateTime.now();
       filtered = filtered.where((ride) {
         return ride.dateTime.year == today.year &&
-               ride.dateTime.month == today.month &&
-               ride.dateTime.day == today.day;
+            ride.dateTime.month == today.month &&
+            ride.dateTime.day == today.day;
       }).toList();
     } else if (_selectedFilter == 3) {
       // Amanhã
       final tomorrow = DateTime.now().add(const Duration(days: 1));
       filtered = filtered.where((ride) {
         return ride.dateTime.year == tomorrow.year &&
-               ride.dateTime.month == tomorrow.month &&
-               ride.dateTime.day == tomorrow.day;
+            ride.dateTime.month == tomorrow.month &&
+            ride.dateTime.day == tomorrow.day;
       }).toList();
     }
 
@@ -236,9 +242,7 @@ class _SearchRideScreenState extends State<SearchRideScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const Center(
-        child: CircularProgressIndicator(),
-      ),
+      builder: (context) => const Center(child: CircularProgressIndicator()),
     );
 
     try {
@@ -262,12 +266,14 @@ class _SearchRideScreenState extends State<SearchRideScreen> {
         if (requestId != null) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Solicitação enviada com sucesso! Aguarde a aprovação do motorista.'),
+              content: Text(
+                'Solicitação enviada com sucesso! Aguarde a aprovação do motorista.',
+              ),
               backgroundColor: Colors.green,
               duration: Duration(seconds: 3),
             ),
           );
-          
+
           // Atualiza lista
           await _loadRides();
         } else {
@@ -297,7 +303,7 @@ class _SearchRideScreenState extends State<SearchRideScreen> {
     // Verifica se o usuário tem solicitação aceita para esta carona
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final user = authProvider.user;
-    
+
     RideRequest? acceptedRequest;
     if (user != null) {
       final requests = await _requestService.getRequestsByPassenger(user.uid);
@@ -368,10 +374,10 @@ class _SearchRideScreenState extends State<SearchRideScreen> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _filteredRides.isEmpty
-                    ? _buildEmptyState()
-                    : _viewMode == 0
-                        ? _buildListView()
-                        : _buildMapView(),
+                ? _buildEmptyState()
+                : _viewMode == 0
+                ? _buildListView()
+                : _buildMapView(),
           ),
         ],
       ),
@@ -422,7 +428,10 @@ class _SearchRideScreenState extends State<SearchRideScreen> {
               ),
               filled: true,
               fillColor: Colors.grey[100],
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
+              ),
             ),
           ),
 
@@ -451,7 +460,7 @@ class _SearchRideScreenState extends State<SearchRideScreen> {
   /// Chip de filtro
   Widget _buildFilterChip(int index, String label, IconData icon) {
     final isSelected = _selectedFilter == index;
-    
+
     return InkWell(
       onTap: () {
         setState(() {
@@ -537,12 +546,10 @@ class _SearchRideScreenState extends State<SearchRideScreen> {
   /// Card de carona
   Widget _buildRideCard(Ride ride) {
     final timeStr = DateFormat('dd/MM HH:mm').format(ride.dateTime);
-    
+
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       elevation: 2,
       child: InkWell(
         onTap: () => _showRideDetails(ride),
@@ -586,7 +593,10 @@ class _SearchRideScreenState extends State<SearchRideScreen> {
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFF2196F3),
                       borderRadius: BorderRadius.circular(12),
@@ -648,7 +658,11 @@ class _SearchRideScreenState extends State<SearchRideScreen> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.description, size: 18, color: Colors.grey),
+                      const Icon(
+                        Icons.description,
+                        size: 18,
+                        color: Colors.grey,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -672,10 +686,12 @@ class _SearchRideScreenState extends State<SearchRideScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: ride.availableSeats > 0 ? () => _reserveRide(ride) : null,
+                  onPressed: ride.availableSeats > 0
+                      ? () => _reserveRide(ride)
+                      : null,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: ride.availableSeats > 0 
-                        ? const Color(0xFF2196F3) 
+                    backgroundColor: ride.availableSeats > 0
+                        ? const Color(0xFF2196F3)
                         : Colors.grey,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 12),
@@ -684,9 +700,7 @@ class _SearchRideScreenState extends State<SearchRideScreen> {
                     ),
                   ),
                   child: Text(
-                    ride.availableSeats > 0 
-                        ? 'Solicitar Carona' 
-                        : 'Sem Vagas',
+                    ride.availableSeats > 0 ? 'Solicitar Carona' : 'Sem Vagas',
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -707,11 +721,7 @@ class _SearchRideScreenState extends State<SearchRideScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.search_off,
-            size: 80,
-            color: Colors.grey[400],
-          ),
+          Icon(Icons.search_off, size: 80, color: Colors.grey[400]),
           const SizedBox(height: 16),
           Text(
             _searchQuery.isNotEmpty
@@ -728,10 +738,7 @@ class _SearchRideScreenState extends State<SearchRideScreen> {
             _searchQuery.isNotEmpty
                 ? 'Tente outra busca'
                 : 'Ofereça a primeira carona!',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[500],
-            ),
+            style: TextStyle(fontSize: 14, color: Colors.grey[500]),
           ),
         ],
       ),
@@ -772,20 +779,20 @@ class _RideDetailsBottomSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final timeStr = DateFormat("dd/MM/yyyy 'às' HH:mm").format(ride.dateTime);
-    
+
     // Calcula distância se tiver localização do usuário
     Future<String?>? distanceFuture;
     if (userLocation != null) {
       final service = GoogleMapsService();
-      distanceFuture = service.getDistanceMatrix(
-        origin: userLocation!,
-        destination: ride.origin,
-      ).then((result) {
-        if (result != null) {
-          return '${result.distanceKm.toStringAsFixed(1)} km - ${result.duration.inMinutes} min';
-        }
-        return null;
-      }).catchError((_) => null);
+      distanceFuture = service
+          .getDistanceMatrix(origin: userLocation!, destination: ride.origin)
+          .then((result) {
+            if (result != null) {
+              return '${result.distanceKm.toStringAsFixed(1)} km - ${result.duration.inMinutes} min';
+            }
+            return null;
+          })
+          .catchError((_) => null);
     }
 
     return Container(
@@ -839,16 +846,16 @@ class _RideDetailsBottomSheet extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       timeStr,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[600],
-                      ),
+                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                     ),
                   ],
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFF2196F3),
                   borderRadius: BorderRadius.circular(16),
@@ -909,11 +916,15 @@ class _RideDetailsBottomSheet extends StatelessWidget {
                     ],
                   );
                 }
-                
+
                 if (snapshot.hasData && snapshot.data != null) {
                   return Row(
                     children: [
-                      const Icon(Icons.straighten, size: 16, color: Colors.grey),
+                      const Icon(
+                        Icons.straighten,
+                        size: 16,
+                        color: Colors.grey,
+                      ),
                       const SizedBox(width: 8),
                       Text(
                         snapshot.data!,
@@ -925,7 +936,7 @@ class _RideDetailsBottomSheet extends StatelessWidget {
                     ],
                   );
                 }
-                
+
                 return const SizedBox.shrink();
               },
             ),
@@ -947,10 +958,7 @@ class _RideDetailsBottomSheet extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  ride.description!,
-                  style: const TextStyle(fontSize: 15),
-                ),
+                Text(ride.description!, style: const TextStyle(fontSize: 15)),
               ],
             ),
           ],
@@ -967,10 +975,7 @@ class _RideDetailsBottomSheet extends StatelessWidget {
                 icon: const Icon(Icons.chat, color: Colors.white),
                 label: const Text(
                   'Conversar com Motorista',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green,
@@ -989,10 +994,13 @@ class _RideDetailsBottomSheet extends StatelessWidget {
             width: double.infinity,
             height: 56,
             child: ElevatedButton(
-              onPressed: ride.availableSeats > 0 && acceptedRequest == null ? onReserve : null,
+              onPressed: ride.availableSeats > 0 && acceptedRequest == null
+                  ? onReserve
+                  : null,
               style: ElevatedButton.styleFrom(
-                backgroundColor: ride.availableSeats > 0 && acceptedRequest == null
-                    ? const Color(0xFF2196F3) 
+                backgroundColor:
+                    ride.availableSeats > 0 && acceptedRequest == null
+                    ? const Color(0xFF2196F3)
                     : Colors.grey,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
@@ -1002,9 +1010,9 @@ class _RideDetailsBottomSheet extends StatelessWidget {
               child: Text(
                 acceptedRequest != null
                     ? 'Solicitação Aceita'
-                    : ride.availableSeats > 0 
-                        ? 'Solicitar Carona'
-                        : 'Sem Vagas',
+                    : ride.availableSeats > 0
+                    ? 'Solicitar Carona'
+                    : 'Sem Vagas',
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -1062,4 +1070,3 @@ class _RideDetailsBottomSheet extends StatelessWidget {
     );
   }
 }
-

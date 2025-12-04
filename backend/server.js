@@ -1,3 +1,6 @@
+// Backend Node.js para reset de senha usando Firebase Admin SDK
+// Endpoint seguro para validação de token e atualização de senha via servidor
+
 const express = require('express');
 const cors = require('cors');
 const admin = require('firebase-admin');

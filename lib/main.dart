@@ -1,3 +1,6 @@
+// Ponto de entrada principal do aplicativo Carona Universitária UDF
+// Gerencia inicialização do Firebase, notificações push e configurações globais
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
@@ -34,11 +37,14 @@ import 'models/ride.dart';
 import 'components/login_page.dart';
 import 'providers/auth_provider.dart';
 
+// Handler para processar notificações push quando o app está em background
+// Necessário para manter o usuário informado sobre atualizações de caronas
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 }
 
+// Função main: inicializa Firebase, carrega variáveis de ambiente e configura notificações
 void main() async {
   // Garante que os bindings do Flutter foram inicializados
   WidgetsFlutterBinding.ensureInitialized();
@@ -76,6 +82,7 @@ void main() async {
 // Global key para o Navigator (usado em alguns fluxos de autenticação)
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
+// Widget raiz do aplicativo - configura tema, rotas e gerenciamento de estado global
 class CaronaUniApp extends StatelessWidget {
   const CaronaUniApp({super.key});
 

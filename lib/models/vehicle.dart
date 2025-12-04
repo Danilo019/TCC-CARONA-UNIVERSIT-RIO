@@ -1,9 +1,13 @@
+// Modelo que representa um veículo cadastrado no sistema
+// Inclui dados do veículo, documentação e status de validação
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'vehicle_validation_status.dart';
 import 'vehicle_thumbnail_type.dart';
 
-/// Modelo para representar um veículo cadastrado
+// Classe que armazena informações completas do veículo
+// Suporta foto, documentação (CNH/CRLV) e sistema de validação administrativa
 class Vehicle {
   final String id;
   final String driverId; // ID do motorista proprietário

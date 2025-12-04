@@ -1,3 +1,6 @@
+// Serviço de geolocalização - gerencia permissões e captura localização do dispositivo
+// Utiliza Geolocator para obter coordenadas GPS do usuário
+
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/foundation.dart';
@@ -26,7 +29,7 @@ class LocationService {
     try {
       // Verifica se o serviço de localização está habilitado
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      
+
       if (!serviceEnabled) {
         if (kDebugMode) {
           print('✗ Serviço de localização desabilitado');
@@ -36,7 +39,7 @@ class LocationService {
 
       // Verifica status da permissão
       _lastPermissionStatus = await Geolocator.checkPermission();
-      
+
       if (_lastPermissionStatus == LocationPermission.denied) {
         // Solicita permissão
         _lastPermissionStatus = await Geolocator.requestPermission();
@@ -73,9 +76,9 @@ class LocationService {
       if (!serviceEnabled) return false;
 
       _lastPermissionStatus = await Geolocator.checkPermission();
-      
+
       return _lastPermissionStatus == LocationPermission.whileInUse ||
-             _lastPermissionStatus == LocationPermission.always;
+          _lastPermissionStatus == LocationPermission.always;
     } catch (e) {
       if (kDebugMode) {
         print('✗ Erro ao verificar permissão: $e');
@@ -132,7 +135,9 @@ class LocationService {
       );
 
       if (kDebugMode) {
-        print('✓ Localização obtida: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
+        print(
+          '✓ Localização obtida: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}',
+        );
       }
 
       return _currentPosition;
@@ -181,15 +186,19 @@ class LocationService {
     double endLongitude,
   ) {
     return Geolocator.distanceBetween(
-      startLatitude,
-      startLongitude,
-      endLatitude,
-      endLongitude,
-    ) / 1000; // Converte de metros para km
+          startLatitude,
+          startLongitude,
+          endLatitude,
+          endLongitude,
+        ) /
+        1000; // Converte de metros para km
   }
 
   /// Calcula a distância entre duas localizações
-  static double calculateDistanceBetweenLocations(Location start, Location end) {
+  static double calculateDistanceBetweenLocations(
+    Location start,
+    Location end,
+  ) {
     return calculateDistance(
       start.latitude,
       start.longitude,
@@ -206,7 +215,7 @@ class LocationService {
   /// Obtém último status de permissão
   bool get isPermissionGranted {
     return _lastPermissionStatus == LocationPermission.whileInUse ||
-           _lastPermissionStatus == LocationPermission.always;
+        _lastPermissionStatus == LocationPermission.always;
   }
 
   /// Verifica se o serviço de localização está habilitado
@@ -218,4 +227,3 @@ class LocationService {
     }
   }
 }
-

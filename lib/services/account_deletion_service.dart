@@ -1,3 +1,6 @@
+// Serviço de exclusão de conta - implementa Direito ao Esquecimento (LGPD)
+// Remove permanentemente todos os dados do usuário: Firestore, Storage e Auth
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -7,14 +10,15 @@ import 'avaliacao_service.dart';
 import 'ride_request_service.dart';
 
 /// Serviço para gerenciar exclusão de conta (Direito ao Esquecimento LGPD)
-/// 
+///
 /// Este serviço implementa a funcionalidade de exclusão completa de conta do usuário,
 /// removendo todos os dados pessoais do Firestore, Storage e Firebase Auth.
-/// 
+///
 /// Conforme LGPD (Lei Geral de Proteção de Dados), o usuário tem direito ao esquecimento,
 /// que garante a exclusão permanente de seus dados pessoais.
 class AccountDeletionService {
-  static final AccountDeletionService _instance = AccountDeletionService._internal();
+  static final AccountDeletionService _instance =
+      AccountDeletionService._internal();
   factory AccountDeletionService() => _instance;
   AccountDeletionService._internal();
 
@@ -31,14 +35,14 @@ class AccountDeletionService {
   // ============================================================================
 
   /// Exclui completamente a conta do usuário e todos os seus dados
-  /// 
+  ///
   /// Este método implementa o direito ao esquecimento (LGPD) e remove:
   /// - Dados do Firestore (usuário, consentimentos, veículos, caronas, etc.)
   /// - Arquivos do Storage (fotos de perfil, documentos, etc.)
   /// - Conta do Firebase Auth
-  /// 
+  ///
   /// [userId] - ID do usuário a ser excluído
-  /// 
+  ///
   /// Retorna true se a exclusão foi bem-sucedida, false caso contrário
   Future<bool> deleteAccount(String userId) async {
     try {
@@ -49,7 +53,9 @@ class AccountDeletionService {
       // Verifica se o usuário está autenticado e é o próprio usuário
       final currentUser = _firebaseAuth.currentUser;
       if (currentUser == null || currentUser.uid != userId) {
-        throw Exception('Usuário não autenticado ou não autorizado para excluir esta conta');
+        throw Exception(
+          'Usuário não autenticado ou não autorizado para excluir esta conta',
+        );
       }
 
       // Etapa 1: Deletar dados do Firestore
@@ -172,7 +178,7 @@ class AccountDeletionService {
   Future<void> _deleteConsents(String userId) async {
     try {
       final consents = await _consentService.getConsentsByUser(userId);
-      
+
       if (consents.isEmpty) {
         if (kDebugMode) {
           print('   ℹ️  Nenhum consentimento encontrado');
@@ -203,13 +209,18 @@ class AccountDeletionService {
   Future<void> _deleteAvaliacoes(String userId) async {
     try {
       // Busca avaliações onde o usuário é avaliador
-      final avaliacoesComoAvaliador = await _avaliacaoService.listarAvaliacoesPorAvaliador(userId);
-      
-      // Busca avaliações onde o usuário é avaliado
-      final avaliacoesComoAvaliado = await _avaliacaoService.listarAvaliacoesPorAvaliado(userId);
+      final avaliacoesComoAvaliador = await _avaliacaoService
+          .listarAvaliacoesPorAvaliador(userId);
 
-      final todasAvaliacoes = [...avaliacoesComoAvaliador, ...avaliacoesComoAvaliado];
-      
+      // Busca avaliações onde o usuário é avaliado
+      final avaliacoesComoAvaliado = await _avaliacaoService
+          .listarAvaliacoesPorAvaliado(userId);
+
+      final todasAvaliacoes = [
+        ...avaliacoesComoAvaliador,
+        ...avaliacoesComoAvaliado,
+      ];
+
       // Remove duplicatas (se houver)
       final avaliacoesUnicas = <String>{};
       for (final avaliacao in todasAvaliacoes) {
@@ -248,7 +259,8 @@ class AccountDeletionService {
   Future<void> _deleteRideRequests(String userId) async {
     try {
       // Busca solicitações onde o usuário é passageiro
-      final requestsAsPassenger = await _rideRequestService.getRequestsByPassenger(userId);
+      final requestsAsPassenger = await _rideRequestService
+          .getRequestsByPassenger(userId);
 
       // Busca caronas do usuário para encontrar solicitações relacionadas
       final userRidesSnapshot = await _firestore
@@ -289,7 +301,9 @@ class AccountDeletionService {
       await batch.commit();
 
       if (kDebugMode) {
-        print('   ✓ ${todasRequests.length} solicitação(ões) de carona deletada(s)');
+        print(
+          '   ✓ ${todasRequests.length} solicitação(ões) de carona deletada(s)',
+        );
       }
     } catch (e) {
       if (kDebugMode) {
@@ -472,12 +486,12 @@ class AccountDeletionService {
   Future<void> _deleteVehicleFiles(String userId) async {
     try {
       final vehiclesRef = _storage.ref().child('vehicles/$userId');
-      
+
       // Lista todos os arquivos na pasta do veículo
       final listResult = await vehiclesRef.listAll();
-      
+
       int deletedCount = 0;
-      
+
       // Deleta todos os arquivos
       for (final item in listResult.items) {
         try {
@@ -514,12 +528,12 @@ class AccountDeletionService {
   Future<void> _deleteDocuments(String userId) async {
     try {
       final documentsRef = _storage.ref().child('documents/$userId');
-      
+
       // Lista todos os arquivos na pasta de documentos
       final listResult = await documentsRef.listAll();
-      
+
       int deletedCount = 0;
-      
+
       // Deleta todos os arquivos
       for (final item in listResult.items) {
         try {
@@ -568,7 +582,7 @@ class AccountDeletionService {
       if (e.code == 'requires-recent-login') {
         throw Exception(
           'Para excluir sua conta, você precisa fazer login novamente. '
-          'Por favor, saia e entre novamente antes de tentar excluir a conta.'
+          'Por favor, saia e entre novamente antes de tentar excluir a conta.',
         );
       }
       rethrow;
@@ -585,7 +599,7 @@ class AccountDeletionService {
   // ============================================================================
 
   /// Verifica se o usuário pode excluir sua conta
-  /// 
+  ///
   /// Retorna true se o usuário está autenticado e pode excluir a conta
   bool canDeleteAccount(String userId) {
     final currentUser = _firebaseAuth.currentUser;
@@ -593,7 +607,7 @@ class AccountDeletionService {
   }
 
   /// Obtém um resumo dos dados que serão deletados
-  /// 
+  ///
   /// Útil para mostrar ao usuário antes da exclusão
   Future<Map<String, int>> getDataSummary(String userId) async {
     try {
@@ -604,9 +618,12 @@ class AccountDeletionService {
       summary['consentimentos'] = consents.length;
 
       // Avaliações
-      final avaliacoesComoAvaliador = await _avaliacaoService.listarAvaliacoesPorAvaliador(userId);
-      final avaliacoesComoAvaliado = await _avaliacaoService.listarAvaliacoesPorAvaliado(userId);
-      summary['avaliacoes'] = avaliacoesComoAvaliador.length + avaliacoesComoAvaliado.length;
+      final avaliacoesComoAvaliador = await _avaliacaoService
+          .listarAvaliacoesPorAvaliador(userId);
+      final avaliacoesComoAvaliado = await _avaliacaoService
+          .listarAvaliacoesPorAvaliado(userId);
+      summary['avaliacoes'] =
+          avaliacoesComoAvaliador.length + avaliacoesComoAvaliado.length;
 
       // Solicitações de carona
       final requests = await _rideRequestService.getRequestsByPassenger(userId);
