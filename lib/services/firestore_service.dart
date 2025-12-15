@@ -88,6 +88,26 @@ class FirestoreService {
     }
   }
 
+  /// Atualiza campos específicos do usuário
+  Future<void> updateUser(String uid, Map<String, dynamic> data) async {
+    try {
+      await _usersCollection.doc(uid).set(
+        data,
+        SetOptions(merge: true),
+      );
+
+      if (kDebugMode) {
+        print('✓ Usuário atualizado: $uid');
+        print('  Dados: $data');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('✗ Erro ao atualizar usuário: $e');
+      }
+      rethrow;
+    }
+  }
+
   /// Atualiza informações do perfil do usuário
   Future<void> updateUserProfile({
     required String uid,
