@@ -27,9 +27,16 @@ class TokenService {
         throw Exception('Apenas emails @cs.udf.edu.br são permitidos');
       }
 
-      final callable = _functions.httpsCallable('issueActivationToken');
-      final result = await callable
-          .call({'email': email, 'purpose': purpose})
+      // Usa o backend no Railway ao invés da Cloud Function
+      final response = await _emailService.httpClient
+          .post(
+            Uri.parse('${_emailService.backendUrl}/api/issue-token'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'email': email,
+              'purpose': purpose,
+            }),
+          )
           .timeout(
             const Duration(seconds: 30),
             onTimeout: () {
@@ -39,18 +46,25 @@ class TokenService {
             },
           );
 
-      final rawData = result.data;
-      if (rawData is! Map) {
-        throw Exception('Resposta inválida da Cloud Function ao gerar token.');
+      if (response.statusCode != 200) {
+        final errorData = jsonDecode(response.body);
+        throw Exception(
+          errorData['message'] ?? 'Erro ao gerar token: ${response.statusCode}',
+        );
       }
 
-      final data = Map<String, dynamic>.from(rawData);
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      
+      if (data['success'] != true) {
+        throw Exception(data['message'] ?? 'Erro ao gerar token');
+      }
+
       final createdAtMillis = (data['createdAt'] as num?)?.toInt();
       final expiresAtMillis = (data['expiresAt'] as num?)?.toInt();
 
       if (createdAtMillis == null || expiresAtMillis == null) {
         throw Exception(
-          'Resposta incompleta da Cloud Function ao gerar token.',
+          'Resposta incompleta do backend ao gerar token.',
         );
       }
 
@@ -62,23 +76,11 @@ class TokenService {
         isUsed: data['isUsed'] as bool? ?? false,
         userId: data['userId'] as String?,
       );
-    } on FirebaseFunctionsException catch (e) {
+    } catch (e) {
       if (kDebugMode) {
-        print(
-          '✗ Erro na Cloud Function issueActivationToken: ${e.code} - ${e.message}',
-        );
+        print('✗ Erro ao gerar token via Railway: $e');
       }
-
-      if (e.code == 'unimplemented' ||
-          e.code == 'internal' ||
-          e.code == 'unavailable') {
-        throw Exception(
-          e.message ??
-              'Cloud Function não disponível. Verifique o deploy do backend.',
-        );
-      }
-
-      throw Exception(e.message ?? 'Erro ao gerar token. Tente novamente.');
+      rethrow;
     }
   }
 
@@ -88,7 +90,7 @@ class TokenService {
       final token = await _issueToken(email: email, purpose: 'activation');
 
       if (kDebugMode) {
-        print('✓ Token criado via Cloud Function: ${token.token} para $email');
+        print('✓ Token criado via Railway: ${token.token} para $email');
       }
 
       return token;

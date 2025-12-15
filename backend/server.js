@@ -50,6 +50,110 @@ app.get('/', (req, res) => {
   });
 });
 
+// Rota para criar tokens de ativação/reset
+app.post('/api/issue-token', async (req, res) => {
+  try {
+    if (!firebaseInitialized) {
+      return res.status(503).json({
+        success: false,
+        error: 'Firebase Admin SDK não inicializado',
+        message: 'Configure FIREBASE_SERVICE_ACCOUNT',
+      });
+    }
+
+    const { email, purpose = 'activation' } = req.body;
+
+    // Validação de entrada
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: 'missing_email',
+        message: 'Email é obrigatório',
+      });
+    }
+
+    // Valida formato do email
+    if (!email.endsWith('@cs.udf.edu.br')) {
+      return res.status(400).json({
+        success: false,
+        error: 'invalid_email',
+        message: 'Apenas emails @cs.udf.edu.br são permitidos',
+      });
+    }
+
+    // Valida purpose
+    if (purpose !== 'activation' && purpose !== 'password_reset') {
+      return res.status(400).json({
+        success: false,
+        error: 'invalid_purpose',
+        message: 'Purpose inválido. Use "activation" ou "password_reset"',
+      });
+    }
+
+    const firestore = admin.firestore();
+    const TOKEN_VALIDITY_MINUTES = 30;
+    const TOKEN_ATTEMPTS = 10;
+
+    // Função para gerar token de 6 dígitos
+    const generateSixDigitToken = () => {
+      const token = Math.floor(100000 + Math.random() * 900000);
+      return token.toString();
+    };
+
+    // Tenta gerar token único
+    for (let attempt = 0; attempt < TOKEN_ATTEMPTS; attempt++) {
+      const token = generateSixDigitToken();
+      const tokenRef = firestore.collection('activationTokens').doc(token);
+      const tokenDoc = await tokenRef.get();
+
+      if (tokenDoc.exists) {
+        continue; // Token já existe, tenta outro
+      }
+
+      const createdAt = admin.firestore.Timestamp.now();
+      const expiresAt = admin.firestore.Timestamp.fromMillis(
+        createdAt.toMillis() + TOKEN_VALIDITY_MINUTES * 60 * 1000
+      );
+
+      // Cria o token
+      await tokenRef.set({
+        token,
+        email,
+        purpose,
+        createdAt,
+        expiresAt,
+        isUsed: false,
+      });
+
+      console.log(`✓ Token criado com sucesso: ${token} para ${email}`);
+
+      return res.json({
+        success: true,
+        token,
+        email,
+        purpose,
+        isUsed: false,
+        createdAt: createdAt.toMillis(),
+        expiresAt: expiresAt.toMillis(),
+      });
+    }
+
+    // Se chegou aqui, não conseguiu gerar token único
+    return res.status(500).json({
+      success: false,
+      error: 'resource_exhausted',
+      message: 'Não foi possível gerar um token único. Tente novamente.',
+    });
+  } catch (error) {
+    console.error('✗ Erro ao criar token:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'internal_error',
+      message: 'Erro ao criar token. Tente novamente mais tarde.',
+    });
+  }
+});
+
 // Rota para reset de senha
 app.post('/api/reset-password', async (req, res) => {
   try {
