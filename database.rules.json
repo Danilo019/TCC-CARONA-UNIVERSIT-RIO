@@ -7,8 +7,29 @@
       ".write": "auth != null && (!data.exists() || data.child('senderId').val() == auth.uid)",
       "$messageId": {
         ".validate": "newData.child('senderId').val() == auth.uid && newData.hasChildren(['rideId', 'senderId', 'senderName', 'message', 'isDriver', 'timestamp'])",
+        "rideId": {
+          ".validate": "newData.isString()"
+        },
+        "senderId": {
+          ".validate": "newData.isString() && newData.val() == auth.uid"
+        },
+        "senderName": {
+          ".validate": "newData.isString()"
+        },
+        "senderPhotoURL": {
+          ".validate": "newData.isString() || !newData.exists()"
+        },
+        "message": {
+          ".validate": "newData.isString()"
+        },
+        "isDriver": {
+          ".validate": "newData.isBoolean()"
+        },
         "timestamp": {
-        ".validate": "newData.isNumber()"
+          ".validate": "newData.isNumber()"
+        },
+        "$other": {
+          ".validate": false
         }
       },
       ".indexOn": ["rideId", "timestamp"]
