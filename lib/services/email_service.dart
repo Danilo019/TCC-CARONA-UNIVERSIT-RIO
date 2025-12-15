@@ -33,6 +33,14 @@ class EmailService {
   final String? mailgunApiKey = dotenv.env['MAILGUN_API_KEY'];
   final String? mailgunDomain = dotenv.env['MAILGUN_DOMAIN'];
 
+  // Backend URL (Railway)
+  String get backendUrl => 
+      dotenv.env['BACKEND_URL'] ?? 
+      'https://tcc-carona-universit-rio-production.up.railway.app';
+
+  // HTTP Client (reutilizável)
+  final http.Client httpClient = http.Client();
+
   // ===========================================================================
   // ENVIO DE EMAILS
   // ===========================================================================
