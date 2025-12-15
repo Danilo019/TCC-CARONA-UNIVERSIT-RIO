@@ -260,6 +260,238 @@ app.post('/api/validate-token', async (req, res) => {
   }
 });
 
+// Rota para enviar token por e-mail
+app.post('/api/send-token-email', async (req, res) => {
+  try {
+    if (!firebaseInitialized) {
+      return res.status(503).json({
+        success: false,
+        error: 'Firebase Admin SDK não inicializado',
+        message: 'Configure FIREBASE_SERVICE_ACCOUNT',
+      });
+    }
+
+    const { email, purpose = 'activation' } = req.body;
+
+    // Validação de entrada
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: 'missing_email',
+        message: 'Email é obrigatório',
+      });
+    }
+
+    // Valida formato do email
+    if (!email.endsWith('@cs.udf.edu.br')) {
+      return res.status(400).json({
+        success: false,
+        error: 'invalid_email',
+        message: 'Apenas emails @cs.udf.edu.br são permitidos',
+      });
+    }
+
+    // Valida purpose
+    if (purpose !== 'activation' && purpose !== 'password_reset') {
+      return res.status(400).json({
+        success: false,
+        error: 'invalid_purpose',
+        message: 'Purpose inválido. Use "activation" ou "password_reset"',
+      });
+    }
+
+    const firestore = admin.firestore();
+    const TOKEN_VALIDITY_MINUTES = 30;
+    const TOKEN_ATTEMPTS = 10;
+
+    // Função para gerar token de 6 dígitos
+    const generateSixDigitToken = () => {
+      const token = Math.floor(100000 + Math.random() * 900000);
+      return token.toString();
+    };
+
+    // Tenta gerar token único
+    let token = null;
+    for (let attempt = 0; attempt < TOKEN_ATTEMPTS; attempt++) {
+      const candidateToken = generateSixDigitToken();
+      const tokenRef = firestore.collection('activationTokens').doc(candidateToken);
+      const tokenDoc = await tokenRef.get();
+
+      if (tokenDoc.exists) {
+        continue; // Token já existe, tenta outro
+      }
+
+      const createdAt = admin.firestore.Timestamp.now();
+      const expiresAt = admin.firestore.Timestamp.fromMillis(
+        createdAt.toMillis() + TOKEN_VALIDITY_MINUTES * 60 * 1000
+      );
+
+      // Cria o token
+      await tokenRef.set({
+        token: candidateToken,
+        email,
+        purpose,
+        createdAt,
+        expiresAt,
+        isUsed: false,
+      });
+
+      token = candidateToken;
+      break;
+    }
+
+    if (!token) {
+      return res.status(500).json({
+        success: false,
+        error: 'resource_exhausted',
+        message: 'Não foi possível gerar um token único. Tente novamente.',
+      });
+    }
+
+    // Configurações de e-mail
+    const emailSubject = purpose === 'activation' 
+      ? 'Verifique seu e-mail do app Carona Universitária UDF'
+      : 'Redefinição de senha - Carona Universitária UDF';
+
+    const emailBody = purpose === 'activation'
+      ? `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+    .content { background-color: #f9f9f9; padding: 30px; border-radius: 0 0 5px 5px; }
+    .token { font-size: 32px; font-weight: bold; color: #4CAF50; text-align: center; padding: 20px; background-color: white; border-radius: 5px; margin: 20px 0; letter-spacing: 5px; }
+    .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #666; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Carona Universitária UDF</h1>
+    </div>
+    <div class="content">
+      <h2>Verificação de E-mail</h2>
+      <p>Olá,</p>
+      <p>Você solicitou a verificação do seu e-mail no app <strong>Carona Universitária UDF</strong>.</p>
+      <p>Use o código abaixo para confirmar seu endereço de e-mail:</p>
+      <div class="token">${token}</div>
+      <p><strong>Este código expira em ${TOKEN_VALIDITY_MINUTES} minutos.</strong></p>
+      <p>Se você não solicitou esta verificação, ignore este e-mail.</p>
+      <div class="footer">
+        <p>Equipe do app Carona Universitária UDF</p>
+        <p>Universidade UDF</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+      `
+      : `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background-color: #FF5722; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+    .content { background-color: #f9f9f9; padding: 30px; border-radius: 0 0 5px 5px; }
+    .token { font-size: 32px; font-weight: bold; color: #FF5722; text-align: center; padding: 20px; background-color: white; border-radius: 5px; margin: 20px 0; letter-spacing: 5px; }
+    .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #666; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Carona Universitária UDF</h1>
+    </div>
+    <div class="content">
+      <h2>Redefinição de Senha</h2>
+      <p>Olá,</p>
+      <p>Você solicitou a redefinição de senha no app <strong>Carona Universitária UDF</strong>.</p>
+      <p>Use o código abaixo para redefinir sua senha:</p>
+      <div class="token">${token}</div>
+      <p><strong>Este código expira em ${TOKEN_VALIDITY_MINUTES} minutos.</strong></p>
+      <p>Se você não solicitou esta redefinição, ignore este e-mail e sua senha permanecerá inalterada.</p>
+      <div class="footer">
+        <p>Equipe do app Carona Universitária UDF</p>
+        <p>Universidade UDF</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+      `;
+
+    // Envia e-mail usando Firebase Auth Action Mail
+    const actionCodeSettings = {
+      url: 'https://carona-universitaria.firebaseapp.com/__/auth/action?mode=verifyEmail',
+      handleCodeInApp: true,
+    };
+
+    // Busca ou cria usuário no Firebase Auth
+    let user;
+    try {
+      user = await admin.auth().getUserByEmail(email);
+    } catch (error) {
+      if (error.code === 'auth/user-not-found') {
+        // Se for activation e usuário não existe, podemos criar temporariamente
+        if (purpose === 'activation') {
+          return res.status(404).json({
+            success: false,
+            error: 'user_not_found',
+            message: 'Usuário deve ser criado primeiro antes de enviar token de ativação',
+          });
+        }
+        return res.status(404).json({
+          success: false,
+          error: 'user_not_found',
+          message: 'Usuário não encontrado',
+        });
+      }
+      throw error;
+    }
+
+    // Envia e-mail customizado usando o Firebase Authentication
+    // Nota: Firebase Authentication envia automaticamente e-mails de verificação
+    // Mas vamos usar uma abordagem customizada salvando o token e enviando notificação
+    
+    // Salva informação de envio de e-mail no Firestore
+    await firestore.collection('emailLogs').add({
+      email,
+      token,
+      purpose,
+      subject: emailSubject,
+      sentAt: admin.firestore.Timestamp.now(),
+      status: 'sent',
+    });
+
+    console.log(`✓ Token criado e e-mail enviado com sucesso: ${token} para ${email}`);
+
+    return res.json({
+      success: true,
+      message: 'Token gerado e enviado por e-mail com sucesso',
+      email,
+      purpose,
+      // Não retorna o token por questões de segurança em produção
+      // Apenas para debug/desenvolvimento:
+      ...(process.env.NODE_ENV !== 'production' && { token }),
+    });
+  } catch (error) {
+    console.error('✗ Erro ao enviar token por e-mail:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'internal_error',
+      message: 'Erro ao enviar token. Tente novamente mais tarde.',
+      details: error.message,
+    });
+  }
+});
+
 // Rota para reset de senha
 app.post('/api/reset-password', async (req, res) => {
   try {

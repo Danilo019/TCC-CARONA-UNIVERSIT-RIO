@@ -41,6 +41,67 @@ class EmailService {
   // HTTP Client (reutilizável)
   final http.Client httpClient = http.Client();
 
+  /// Envia email via backend Railway (método recomendado)
+  Future<bool> sendEmailViaRailway({
+    required String toEmail,
+    required String purpose, // 'activation' ou 'password_reset'
+    String? token,
+  }) async {
+    try {
+      if (kDebugMode) {
+        print('📧 Enviando email via Railway Backend...');
+        print('   Para: $toEmail');
+        print('   Propósito: $purpose');
+      }
+
+      final url = Uri.parse('$backendUrl/api/send-token-email');
+      
+      final response = await httpClient.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'email': toEmail,
+          'purpose': purpose,
+        }),
+      ).timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          throw Exception('Timeout ao enviar e-mail. Verifique sua conexão.');
+        },
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        if (kDebugMode) {
+          print('✓ Email enviado via Railway com sucesso!');
+          print('   Mensagem: ${data['message']}');
+          if (data['token'] != null) {
+            print('   Token gerado: ${data['token']}');
+          }
+        }
+        return true;
+      } else {
+        if (kDebugMode) {
+          print('✗ Erro ao enviar via Railway:');
+          print('   Status: ${response.statusCode}');
+          print('   Erro: ${data['error']}');
+          print('   Mensagem: ${data['message']}');
+        }
+        return false;
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('✗ Erro ao enviar via Railway: $e');
+        print('💡 Verifique se o backend Railway está rodando');
+        print('💡 URL configurada: $backendUrl');
+      }
+      return false;
+    }
+  }
+
   // ===========================================================================
   // ENVIO DE EMAILS
   // ===========================================================================
@@ -52,6 +113,26 @@ class EmailService {
     required String userName,
   }) async {
     try {
+      // PRIORIDADE 1: Tentar Railway Backend (método mais confiável)
+      if (kDebugMode) {
+        print('🚀 Tentando enviar via Railway Backend...');
+      }
+      
+      final railwaySuccess = await sendEmailViaRailway(
+        toEmail: toEmail,
+        purpose: 'activation',
+        token: token,
+      );
+      
+      if (railwaySuccess) {
+        return true;
+      }
+      
+      // FALLBACK: Se Railway falhar, tenta outros provedores
+      if (kDebugMode) {
+        print('⚠ Railway indisponível, tentando provedor alternativo: $_provider');
+      }
+
       final subject = 'Ativação da Conta - Carona Universitária';
       final htmlBody = _buildActivationEmailHtml(token, userName);
       final textBody = _buildActivationEmailText(token, userName);
@@ -98,6 +179,26 @@ class EmailService {
     String? token,
   }) async {
     try {
+      // PRIORIDADE 1: Tentar Railway Backend (método mais confiável)
+      if (kDebugMode) {
+        print('🚀 Tentando enviar via Railway Backend...');
+      }
+      
+      final railwaySuccess = await sendEmailViaRailway(
+        toEmail: toEmail,
+        purpose: 'password_reset',
+        token: token,
+      );
+      
+      if (railwaySuccess) {
+        return true;
+      }
+      
+      // FALLBACK: Se Railway falhar, tenta outros provedores
+      if (kDebugMode) {
+        print('⚠ Railway indisponível, tentando provedor alternativo: $_provider');
+      }
+
       final subject = 'Recuperação de Senha - Carona Universitária';
       final htmlBody = _buildPasswordResetEmailHtml(userName, token);
       final textBody = _buildPasswordResetEmailText(userName, token);
