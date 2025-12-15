@@ -249,5 +249,28 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && 
                        resource.data.userId == request.auth.uid;
     }
+    
+    // ============================================================================
+    // AVALIAÇÕES (AVALIACOES)
+    // ============================================================================
+    
+    match /avaliacoes/{avaliacaoId} {
+      // Permite leitura para usuários autenticados
+      // Especialmente se for o avaliador ou o avaliado
+      allow read: if isAuthenticated();
+      
+      // Permite criar avaliação apenas para o próprio avaliador
+      // O avaliador_usuario_id deve corresponder ao usuário autenticado
+      allow create: if isAuthenticated() && 
+                       request.resource.data.avaliador_usuario_id == request.auth.uid;
+      
+      // Permite atualizar apenas se for o avaliador original
+      allow update: if isAuthenticated() && 
+                       resource.data.avaliador_usuario_id == request.auth.uid;
+      
+      // Permite deletar apenas se for o avaliador
+      allow delete: if isAuthenticated() && 
+                       resource.data.avaliador_usuario_id == request.auth.uid;
+    }
   }
 }

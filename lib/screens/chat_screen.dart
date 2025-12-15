@@ -105,10 +105,19 @@ class _ChatScreenState extends State<ChatScreen> {
     });
 
     try {
+      // Usa displayName, se não tiver usa o email sem @dominio, se não tiver usa 'Usuário'
+      final senderName = user.displayName?.isNotEmpty == true 
+          ? user.displayName! 
+          : (user.email.isNotEmpty ? user.email.split('@')[0] : 'Usuário');
+      
+      if (kDebugMode) {
+        print('📤 Enviando mensagem: "$message" de $senderName');
+      }
+      
       final messageId = await _chatService.sendMessage(
         rideId: widget.ride.id,
         senderId: user.uid,
-        senderName: user.displayName ?? user.email,
+        senderName: senderName,
         senderPhotoURL: user.photoURL,
         message: message,
         isDriver: widget.isDriver,
@@ -208,10 +217,15 @@ class _ChatScreenState extends State<ChatScreen> {
           ? '📍 Ponto de embarque sugerido:\n$addressMessage\n\n(Coordenadas: ${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)})'
           : locationMessage;
 
+      // Usa displayName, se não tiver usa o email sem @dominio, se não tiver usa 'Usuário'
+      final senderName = user.displayName?.isNotEmpty == true 
+          ? user.displayName! 
+          : (user.email.isNotEmpty ? user.email.split('@')[0] : 'Usuário');
+
       final messageId = await _chatService.sendMessage(
         rideId: widget.ride.id,
         senderId: user.uid,
-        senderName: user.displayName ?? user.email,
+        senderName: senderName,
         senderPhotoURL: user.photoURL,
         message: messageText,
         isDriver: widget.isDriver,

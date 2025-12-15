@@ -151,31 +151,50 @@ class ChatService {
   }) async {
     try {
       if (message.trim().isEmpty) {
+        if (kDebugMode) {
+          print('⚠ Mensagem vazia, não enviando');
+        }
         return null;
       }
 
-      final messageMap = {
+      // Remove senderPhotoURL se for null para evitar problemas com regras do Firebase
+      final messageMap = <String, dynamic>{
         'rideId': rideId,
         'senderId': senderId,
         'senderName': senderName,
-        'senderPhotoURL': senderPhotoURL,
         'message': message.trim(),
         'isDriver': isDriver,
-        'timestamp': DateTime.now().millisecondsSinceEpoch, // Realtime Database usa int
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
       };
+
+      // Só adiciona senderPhotoURL se não for null
+      if (senderPhotoURL != null && senderPhotoURL.isNotEmpty) {
+        messageMap['senderPhotoURL'] = senderPhotoURL;
+      }
+
+      if (kDebugMode) {
+        print('📝 Preparando mensagem: $messageMap');
+      }
 
       // Cria referência para nova mensagem
       final messageRef = _messagesRef.push();
+      
+      if (kDebugMode) {
+        print('🔑 Chave gerada: ${messageRef.key}');
+        print('📡 Enviando para Firebase...');
+      }
+      
       await messageRef.set(messageMap);
 
       if (kDebugMode) {
-        print('✓ Mensagem enviada: ${messageRef.key}');
+        print('✓ Mensagem enviada com sucesso: ${messageRef.key}');
       }
 
       return messageRef.key;
-    } catch (e) {
+    } catch (e, stackTrace) {
       if (kDebugMode) {
         print('✗ Erro ao enviar mensagem: $e');
+        print('Stack trace: $stackTrace');
       }
       return null;
     }
