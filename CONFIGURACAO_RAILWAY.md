@@ -23,6 +23,40 @@
    - Nome: `FIREBASE_SERVICE_ACCOUNT`
    - Valor: Cole o JSON completo (em uma linha)
 
+### 2. Configurar SMTP para Envio de E-mails (OBRIGATÓRIO)
+
+**Sem isso, os e-mails NÃO serão enviados!**
+
+#### Opção A: Gmail (Recomendado para teste)
+
+1. Acesse: https://myaccount.google.com/apppasswords
+2. Crie uma "Senha de app" (não use sua senha normal)
+3. No Railway, adicione as variáveis:
+
+```
+SMTP_SERVICE=gmail
+SMTP_USER=seu-email@gmail.com
+SMTP_PASS=xxxx xxxx xxxx xxxx (senha de app gerada)
+```
+
+#### Opção B: Outlook/Hotmail
+
+```
+SMTP_SERVICE=hotmail
+SMTP_USER=seu-email@hotmail.com
+SMTP_PASS=sua-senha
+```
+
+#### Opção C: SMTP Customizado
+
+```
+SMTP_SERVICE=smtp
+SMTP_HOST=smtp.seuservidor.com
+SMTP_PORT=587
+SMTP_USER=seu-email@dominio.com
+SMTP_PASS=sua-senha
+```
+
 ### 2. Deploy dos Índices Firestore
 
 Execute para criar os índices necessários:

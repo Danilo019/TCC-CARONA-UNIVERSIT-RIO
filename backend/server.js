@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const admin = require('firebase-admin');
+const nodemailer = require('nodemailer');
 
 // Carrega variáveis de ambiente
 require('dotenv').config();
@@ -39,6 +40,28 @@ try {
   }
 } catch (error) {
   console.error('✗ Erro ao inicializar Firebase Admin SDK:', error.message);
+}
+
+// Configura Nodemailer para envio de e-mails
+// Use variáveis de ambiente para configurar SMTP
+let transporter = null;
+try {
+  // Tenta configurar com Gmail (ou outro provedor SMTP)
+  if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+    transporter = nodemailer.createTransport({
+      service: process.env.SMTP_SERVICE || 'gmail',
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS, // Use App Password para Gmail
+      },
+    });
+    console.log('✓ Nodemailer configurado com sucesso');
+  } else {
+    console.warn('⚠ SMTP não configurado - e-mails não serão enviados');
+    console.warn('💡 Configure SMTP_USER e SMTP_PASS no Railway');
+  }
+} catch (error) {
+  console.error('✗ Erro ao configurar Nodemailer:', error.message);
 }
 
 // Rota de health check
@@ -456,30 +479,58 @@ app.post('/api/send-token-email', async (req, res) => {
       throw error;
     }
 
-    // Envia e-mail customizado usando o Firebase Authentication
-    // Nota: Firebase Authentication envia automaticamente e-mails de verificação
-    // Mas vamos usar uma abordagem customizada salvando o token e enviando notificação
+    // Tenta enviar e-mail real usando Nodemailer
+    let emailSent = false;
+    let emailError = null;
+
+    if (transporter) {
+      try {
+        const mailOptions = {
+          from: `"Carona Universitária UDF" <${process.env.SMTP_USER}>`,
+          to: email,
+          subject: emailSubject,
+          html: emailBody,
+        };
+
+        await transporter.sendMail(mailOptions);
+        emailSent = true;
+        console.log(`✓ E-mail enviado com sucesso para: ${email}`);
+      } catch (error) {
+        console.error(`✗ Erro ao enviar e-mail: ${error.message}`);
+        emailError = error.message;
+        // Continua mesmo se falhar, pois o token já foi criado
+      }
+    } else {
+      console.warn('⚠ SMTP não configurado - e-mail não foi enviado');
+      emailError = 'SMTP não configurado no servidor';
+    }
     
-    // Salva informação de envio de e-mail no Firestore
+    // Salva log no Firestore
     await firestore.collection('emailLogs').add({
       email,
       token,
       purpose,
       subject: emailSubject,
       sentAt: admin.firestore.Timestamp.now(),
-      status: 'sent',
+      status: emailSent ? 'sent' : 'failed',
+      error: emailError || null,
     });
 
-    console.log(`✓ Token criado e e-mail enviado com sucesso: ${token} para ${email}`);
+    console.log(`✓ Token criado: ${token} para ${email}`);
+    if (!emailSent) {
+      console.warn(`⚠ E-mail não foi enviado. Configure SMTP no Railway.`);
+    }
 
     return res.json({
       success: true,
-      message: 'Token gerado e enviado por e-mail com sucesso',
+      message: emailSent 
+        ? 'Token gerado e enviado por e-mail com sucesso'
+        : 'Token gerado (e-mail não enviado - configure SMTP)',
       email,
       purpose,
-      // Não retorna o token por questões de segurança em produção
-      // Apenas para debug/desenvolvimento:
-      ...(process.env.NODE_ENV !== 'production' && { token }),
+      emailSent,
+      // Retorna o token em desenvolvimento OU se o email não foi enviado
+      ...(process.env.NODE_ENV !== 'production' || !emailSent ? { token } : {}),
     });
   } catch (error) {
     console.error('✗ Erro ao enviar token por e-mail:', error);
