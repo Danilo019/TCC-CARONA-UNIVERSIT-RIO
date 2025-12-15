@@ -186,6 +186,10 @@ class TokenService {
   /// Usa EmailService para envio real
   Future<bool> sendActivationEmail(String email, String token) async {
     try {
+      if (kDebugMode) {
+        print('📧 Tentando enviar email de ativação para $email com token $token');
+      }
+
       // Extrai o nome do usuário do email (parte antes do @)
       final userName = email.split('@').first;
 

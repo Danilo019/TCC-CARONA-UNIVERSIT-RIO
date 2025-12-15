@@ -648,17 +648,37 @@ class _RegisterScreenState extends State<RegisterScreen> {
         token.token,
       );
 
-      if (emailSent) {
+      // Em desenvolvimento, permite avançar mesmo sem envio de email
+      final canProceed = emailSent || kDebugMode;
+      
+      if (canProceed) {
+        if (kDebugMode) {
+          if (emailSent) {
+            print('✓ Email enviado com sucesso, mudando para tela de verificação');
+          } else {
+            print('⚠ Email não enviado (modo debug), mas permitindo avançar');
+            print('💡 Token gerado: ${token.token}');
+          }
+        }
+        
         setState(() {
           _isEmailSent = true;
         });
 
+        if (kDebugMode) {
+          print('✓ Estado atualizado: _isEmailSent = $_isEmailSent');
+        }
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Código enviado para $email'),
-              backgroundColor: Colors.green,
-              duration: const Duration(seconds: 3),
+              content: Text(
+                emailSent
+                    ? 'Código enviado para $email'
+                    : 'Código: ${token.token} (Email não configurado)',
+              ),
+              backgroundColor: emailSent ? Colors.green : Colors.orange,
+              duration: Duration(seconds: emailSent ? 3 : 8),
             ),
           );
         }
