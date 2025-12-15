@@ -154,6 +154,112 @@ app.post('/api/issue-token', async (req, res) => {
   }
 });
 
+// Rota para validar tokens
+app.post('/api/validate-token', async (req, res) => {
+  try {
+    if (!firebaseInitialized) {
+      return res.status(503).json({
+        success: false,
+        error: 'Firebase Admin SDK não inicializado',
+        message: 'Configure FIREBASE_SERVICE_ACCOUNT',
+      });
+    }
+
+    const { email, token, markAsUsed = false } = req.body;
+
+    // Validação de entrada
+    if (!email || !token) {
+      return res.status(400).json({
+        success: false,
+        error: 'missing_fields',
+        message: 'Email e token são obrigatórios',
+      });
+    }
+
+    // Valida formato do email
+    if (!email.endsWith('@cs.udf.edu.br')) {
+      return res.status(400).json({
+        success: false,
+        error: 'invalid_email',
+        message: 'Apenas emails @cs.udf.edu.br são permitidos',
+      });
+    }
+
+    const firestore = admin.firestore();
+    const tokenRef = firestore.collection('activationTokens').doc(token);
+    const tokenDoc = await tokenRef.get();
+
+    if (!tokenDoc.exists) {
+      return res.status(404).json({
+        success: false,
+        isValid: false,
+        error: 'token_not_found',
+        message: 'Token inválido ou não encontrado',
+      });
+    }
+
+    const tokenData = tokenDoc.data();
+
+    // Valida correspondência do email
+    if (tokenData.email !== email) {
+      return res.status(403).json({
+        success: false,
+        isValid: false,
+        error: 'token_mismatch',
+        message: 'Token não corresponde ao email informado',
+      });
+    }
+
+    // Verifica se já foi usado
+    if (tokenData.isUsed === true) {
+      return res.status(403).json({
+        success: false,
+        isValid: false,
+        error: 'token_used',
+        message: 'Token já foi usado',
+      });
+    }
+
+    // Verifica expiração
+    const expiresAt = tokenData.expiresAt.toMillis();
+    if (Date.now() > expiresAt) {
+      return res.status(403).json({
+        success: false,
+        isValid: false,
+        error: 'token_expired',
+        message: 'Token expirado. Solicite um novo código.',
+      });
+    }
+
+    // Se markAsUsed=true, marca o token como usado
+    if (markAsUsed) {
+      await tokenRef.update({
+        isUsed: true,
+      });
+      console.log(`✓ Token marcado como usado: ${token} para ${email}`);
+    }
+
+    console.log(`✓ Token validado com sucesso: ${token} para ${email}`);
+
+    return res.json({
+      success: true,
+      isValid: true,
+      token: tokenData.token,
+      email: tokenData.email,
+      purpose: tokenData.purpose,
+      expiresAt: expiresAt,
+    });
+  } catch (error) {
+    console.error('✗ Erro ao validar token:', error);
+    return res.status(500).json({
+      success: false,
+      isValid: false,
+      error: 'internal_error',
+      message: 'Erro ao validar token. Tente novamente mais tarde.',
+    });
+  }
+});
+
 // Rota para reset de senha
 app.post('/api/reset-password', async (req, res) => {
   try {
