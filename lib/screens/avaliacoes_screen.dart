@@ -49,7 +49,9 @@ class _AvaliacoesScreenState extends State<AvaliacoesScreen> {
         return;
       }
 
-      final pendentes = await _avaliacaoService.buscarTodasCaronasPendentes(user.uid);
+      final pendentes = await _avaliacaoService.buscarTodasCaronasPendentes(
+        user.uid,
+      );
 
       if (mounted) {
         setState(() {
@@ -75,12 +77,24 @@ class _AvaliacoesScreenState extends State<AvaliacoesScreen> {
     }
   }
 
-  /// Busca o nome de um usuário pelo ID
+  // Cache local de nomes para evitar múltiplas requisições
+  final Map<String, String> _cacheNomes = {};
+
+  /// Busca o nome de um usuário pelo ID com cache local
   Future<String> _buscarNomeUsuario(String usuarioId) async {
+    // Retorna do cache se já existe
+    if (_cacheNomes.containsKey(usuarioId)) {
+      return _cacheNomes[usuarioId]!;
+    }
+
     try {
-      final doc = await _avaliacaoService.buscarNomeUsuarioPorId(usuarioId);
-      return doc ?? 'Usuário';
+      final nome = await _avaliacaoService.buscarNomeUsuarioPorId(usuarioId);
+      _cacheNomes[usuarioId] = nome;
+      return nome;
     } catch (e) {
+      if (kDebugMode) {
+        print('✗ Erro ao buscar nome: $e');
+      }
       return 'Usuário';
     }
   }
@@ -109,7 +123,9 @@ class _AvaliacoesScreenState extends State<AvaliacoesScreen> {
         print('🔄 Carregando avaliações recebidas para: ${user.uid}');
       }
 
-      final recebidas = await _avaliacaoService.listarAvaliacoesPorAvaliado(user.uid);
+      final recebidas = await _avaliacaoService.listarAvaliacoesPorAvaliado(
+        user.uid,
+      );
 
       if (kDebugMode) {
         print('✓ ${recebidas.length} avaliações recebidas carregadas');
@@ -156,20 +172,20 @@ class _AvaliacoesScreenState extends State<AvaliacoesScreen> {
       ),
     );
 
-      if (resultado == true && mounted) {
-        // Recarrega a lista após avaliar
-        await _carregarCaronasPendentes();
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Avaliação enviada com sucesso!'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
+    if (resultado == true && mounted) {
+      // Recarrega a lista após avaliar
+      await _carregarCaronasPendentes();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Avaliação enviada com sucesso!'),
+            backgroundColor: Colors.green,
+          ),
+        );
       }
     }
+  }
 
   /// Abre o diálogo de avaliação do sistema
   Future<void> _abrirDialogoAvaliacaoSistema() async {
@@ -236,14 +252,14 @@ class _AvaliacoesScreenState extends State<AvaliacoesScreen> {
             ),
           ),
           const Divider(height: 1),
-          
+
           // Conteúdo
           Expanded(
             child: _selectedTab == 0
                 ? _buildPendentesTab()
                 : _selectedTab == 1
-                    ? _buildRecebidasTab()
-                    : _buildSistemaTab(),
+                ? _buildRecebidasTab()
+                : _buildSistemaTab(),
           ),
         ],
       ),
@@ -270,7 +286,9 @@ class _AvaliacoesScreenState extends State<AvaliacoesScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF2196F3).withValues(alpha: 0.1) : Colors.transparent,
+          color: isSelected
+              ? const Color(0xFF2196F3).withValues(alpha: 0.1)
+              : Colors.transparent,
           border: Border(
             bottom: BorderSide(
               color: isSelected ? const Color(0xFF2196F3) : Colors.transparent,
@@ -304,9 +322,7 @@ class _AvaliacoesScreenState extends State<AvaliacoesScreen> {
   /// Tab de avaliações pendentes
   Widget _buildPendentesTab() {
     if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     if (_caronasPendentes.isEmpty) {
@@ -314,11 +330,7 @@ class _AvaliacoesScreenState extends State<AvaliacoesScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.check_circle_outline,
-              size: 80,
-              color: Colors.grey[400],
-            ),
+            Icon(Icons.check_circle_outline, size: 80, color: Colors.grey[400]),
             const SizedBox(height: 16),
             Text(
               'Nenhuma avaliação pendente',
@@ -331,10 +343,7 @@ class _AvaliacoesScreenState extends State<AvaliacoesScreen> {
             const SizedBox(height: 8),
             Text(
               'Todas as suas caronas já foram avaliadas!',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[500],
-              ),
+              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
             ),
           ],
         ),
@@ -357,9 +366,7 @@ class _AvaliacoesScreenState extends State<AvaliacoesScreen> {
   /// Tab de avaliações recebidas
   Widget _buildRecebidasTab() {
     if (_isLoadingRecebidas) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     if (_avaliacoesRecebidas.isEmpty) {
@@ -367,11 +374,7 @@ class _AvaliacoesScreenState extends State<AvaliacoesScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.star_border,
-              size: 80,
-              color: Colors.grey[400],
-            ),
+            Icon(Icons.star_border, size: 80, color: Colors.grey[400]),
             const SizedBox(height: 16),
             Text(
               'Nenhuma avaliação recebida',
@@ -384,10 +387,7 @@ class _AvaliacoesScreenState extends State<AvaliacoesScreen> {
             const SizedBox(height: 8),
             Text(
               'Complete caronas para receber avaliações',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[500],
-              ),
+              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
@@ -458,10 +458,64 @@ class _AvaliacoesScreenState extends State<AvaliacoesScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             FutureBuilder<String>(
-                              future: _buscarNomeUsuario(avaliacao.avaliadorUsuarioId),
+                              future: _buscarNomeUsuario(
+                                avaliacao.avaliadorUsuarioId,
+                              ),
                               builder: (context, snapshot) {
+                                if (kDebugMode) {
+                                  print(
+                                    '📝 FutureBuilder - Estado: ${snapshot.connectionState}',
+                                  );
+                                  print(
+                                    '   AvaliadorId: ${avaliacao.avaliadorUsuarioId}',
+                                  );
+                                  print('   Nome: ${snapshot.data}');
+                                  print('   Erro: ${snapshot.error}');
+                                }
+
+                                if (snapshot.connectionState ==
+                                    ConnectionState.waiting) {
+                                  return Row(
+                                    children: [
+                                      SizedBox(
+                                        width: 12,
+                                        height: 12,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                                Colors.grey[400]!,
+                                              ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      const Text(
+                                        'Carregando...',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.grey,
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                }
+
+                                if (snapshot.hasError) {
+                                  return const Text(
+                                    'Erro ao carregar nome',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.red,
+                                    ),
+                                  );
+                                }
+
+                                final nomeExibido = snapshot.data ?? 'Usuário';
+
                                 return Text(
-                                  snapshot.data ?? 'Carregando...',
+                                  nomeExibido,
                                   style: const TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.bold,
@@ -472,7 +526,9 @@ class _AvaliacoesScreenState extends State<AvaliacoesScreen> {
                               },
                             ),
                             Text(
-                              DateFormat('dd/MM/yyyy HH:mm').format(dataAvaliacao),
+                              DateFormat(
+                                'dd/MM/yyyy HH:mm',
+                              ).format(dataAvaliacao),
                               style: TextStyle(
                                 fontSize: 12,
                                 color: Colors.grey[600],
@@ -527,10 +583,7 @@ class _AvaliacoesScreenState extends State<AvaliacoesScreen> {
                     Expanded(
                       child: Text(
                         comentario,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[800],
-                        ),
+                        style: TextStyle(fontSize: 14, color: Colors.grey[800]),
                       ),
                     ),
                   ],
@@ -567,27 +620,17 @@ class _AvaliacoesScreenState extends State<AvaliacoesScreen> {
               padding: const EdgeInsets.all(20),
               child: Column(
                 children: [
-                  Icon(
-                    Icons.star_rate,
-                    size: 60,
-                    color: Colors.amber[600],
-                  ),
+                  Icon(Icons.star_rate, size: 60, color: Colors.amber[600]),
                   const SizedBox(height: 16),
                   const Text(
                     'Avalie o Sistema',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'Sua opinião é muito importante para melhorarmos o aplicativo!',
                     textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
-                    ),
+                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                   ),
                   const SizedBox(height: 24),
                   ElevatedButton.icon(
@@ -676,10 +719,7 @@ class _AvaliacoesScreenState extends State<AvaliacoesScreen> {
               const SizedBox(height: 4),
               Text(
                 description,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                ),
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
               ),
             ],
           ),
@@ -691,7 +731,9 @@ class _AvaliacoesScreenState extends State<AvaliacoesScreen> {
   /// Card de carona pendente
   Widget _buildCaronaCard(CaronaPendenteAvaliacao carona) {
     final tipoLabel = carona.tipo == 'motorista' ? 'Motorista' : 'Passageiro';
-    final tipoIcon = carona.tipo == 'motorista' ? Icons.directions_car : Icons.person;
+    final tipoIcon = carona.tipo == 'motorista'
+        ? Icons.directions_car
+        : Icons.person;
     final tipoColor = carona.tipo == 'motorista' ? Colors.blue : Colors.green;
 
     return Card(
@@ -758,7 +800,11 @@ class _AvaliacoesScreenState extends State<AvaliacoesScreen> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.pending, size: 16, color: Colors.orange[800]),
+                        Icon(
+                          Icons.pending,
+                          size: 16,
+                          color: Colors.orange[800],
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           'Pendente',
@@ -781,10 +827,7 @@ class _AvaliacoesScreenState extends State<AvaliacoesScreen> {
                   Expanded(
                     child: Text(
                       carona.origem,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey[700],
-                      ),
+                      style: TextStyle(fontSize: 13, color: Colors.grey[700]),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -799,10 +842,7 @@ class _AvaliacoesScreenState extends State<AvaliacoesScreen> {
                   Expanded(
                     child: Text(
                       carona.destino,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey[700],
-                      ),
+                      style: TextStyle(fontSize: 13, color: Colors.grey[700]),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -816,10 +856,7 @@ class _AvaliacoesScreenState extends State<AvaliacoesScreen> {
                   const SizedBox(width: 8),
                   Text(
                     DateFormat('dd/MM/yyyy HH:mm').format(carona.dataCarona),
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                   ),
                 ],
               ),
@@ -854,4 +891,3 @@ class _AvaliacoesScreenState extends State<AvaliacoesScreen> {
     );
   }
 }
-

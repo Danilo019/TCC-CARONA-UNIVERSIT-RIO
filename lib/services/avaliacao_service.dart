@@ -12,7 +12,8 @@ class AvaliacaoService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   /// Collection references
-  CollectionReference get _avaliacoesCollection => _firestore.collection('avaliacoes');
+  CollectionReference get _avaliacoesCollection =>
+      _firestore.collection('avaliacoes');
   CollectionReference get _caronasCollection => _firestore.collection('rides');
   CollectionReference get _usuariosCollection => _firestore.collection('users');
 
@@ -46,21 +47,64 @@ class AvaliacaoService {
     }
   }
 
-  /// Busca o nome de um usuário pelo ID
-  Future<String?> buscarNomeUsuarioPorId(String usuarioId) async {
+  // Cache para nomes de usuários
+  final Map<String, String> _cacheNomesUsuarios = {};
+
+  /// Busca o nome de um usuário pelo ID com cache
+  Future<String> buscarNomeUsuarioPorId(String usuarioId) async {
+    // Verifica cache primeiro
+    if (_cacheNomesUsuarios.containsKey(usuarioId)) {
+      return _cacheNomesUsuarios[usuarioId]!;
+    }
+
     try {
-      final doc = await _usuariosCollection.doc(usuarioId).get();
-      if (doc.exists) {
-        final data = doc.data() as Map<String, dynamic>?;
-        return data?['displayName'] ?? data?['email']?.toString().split('@')[0] ?? 'Usuário';
+      if (kDebugMode) {
+        print('🔍 Buscando nome do usuário: $usuarioId');
       }
-      return null;
+
+      final doc = await _usuariosCollection.doc(usuarioId).get();
+
+      if (!doc.exists) {
+        if (kDebugMode) {
+          print('⚠️ Usuário $usuarioId não encontrado no Firestore');
+        }
+        return 'Usuário não encontrado';
+      }
+
+      final data = doc.data() as Map<String, dynamic>?;
+
+      if (data == null) {
+        return 'Usuário';
+      }
+
+      // Tenta múltiplos campos possíveis para o nome
+      String nome =
+          data['displayName'] as String? ??
+          data['fullName'] as String? ??
+          data['name'] as String? ??
+          data['email']?.toString().split('@')[0] ??
+          'Usuário';
+
+      if (kDebugMode) {
+        print('✓ Nome encontrado: $nome para usuário $usuarioId');
+        print('   Dados disponíveis: ${data.keys.join(', ')}');
+      }
+
+      // Armazena no cache
+      _cacheNomesUsuarios[usuarioId] = nome;
+
+      return nome;
     } catch (e) {
       if (kDebugMode) {
-        print('✗ Erro ao buscar nome do usuário: $e');
+        print('✗ Erro ao buscar nome do usuário $usuarioId: $e');
       }
-      return null;
+      return 'Usuário';
     }
+  }
+
+  /// Limpa o cache de nomes
+  void limparCacheNomes() {
+    _cacheNomesUsuarios.clear();
   }
 
   /// Valida todas as referências antes de criar uma avaliação
@@ -83,7 +127,9 @@ class AvaliacaoService {
     // Valida que o avaliador não está se avaliando
     if (avaliadorUsuarioId.trim() == avaliadoUsuarioId.trim()) {
       if (kDebugMode) {
-        print('⚠ Tentativa de autoavaliação detectada: avaliador=$avaliadorUsuarioId, avaliado=$avaliadoUsuarioId');
+        print(
+          '⚠ Tentativa de autoavaliação detectada: avaliador=$avaliadorUsuarioId, avaliado=$avaliadoUsuarioId',
+        );
       }
       throw Exception('Um usuário não pode se avaliar');
     }
@@ -96,7 +142,9 @@ class AvaliacaoService {
       }
     } catch (e) {
       if (e.toString().contains('permission-denied')) {
-        throw Exception('Permissão negada: Verifique as regras do Firestore para a coleção "rides"');
+        throw Exception(
+          'Permissão negada: Verifique as regras do Firestore para a coleção "rides"',
+        );
       }
       rethrow;
     }
@@ -109,7 +157,9 @@ class AvaliacaoService {
       }
     } catch (e) {
       if (e.toString().contains('permission-denied')) {
-        throw Exception('Permissão negada: Verifique as regras do Firestore para a coleção "users"');
+        throw Exception(
+          'Permissão negada: Verifique as regras do Firestore para a coleção "users"',
+        );
       }
       rethrow;
     }
@@ -122,7 +172,9 @@ class AvaliacaoService {
       }
     } catch (e) {
       if (e.toString().contains('permission-denied')) {
-        throw Exception('Permissão negada: Verifique as regras do Firestore para a coleção "users"');
+        throw Exception(
+          'Permissão negada: Verifique as regras do Firestore para a coleção "users"',
+        );
       }
       rethrow;
     }
@@ -183,7 +235,9 @@ class AvaliacaoService {
       if (kDebugMode) {
         print('✗ Erro ao criar avaliação: $e');
         if (e.toString().contains('permission-denied')) {
-          print('💡 Configure as regras do Firestore para permitir escrita na coleção "avaliacoes"');
+          print(
+            '💡 Configure as regras do Firestore para permitir escrita na coleção "avaliacoes"',
+          );
         }
       }
       rethrow;
@@ -191,7 +245,9 @@ class AvaliacaoService {
   }
 
   /// Lista todas as avaliações de uma carona específica
-  Future<List<AvaliacaoModel>> listarAvaliacoesPorCarona(String caronaId) async {
+  Future<List<AvaliacaoModel>> listarAvaliacoesPorCarona(
+    String caronaId,
+  ) async {
     try {
       final querySnapshot = await _avaliacoesCollection
           .where('carona_id', isEqualTo: caronaId)
@@ -212,7 +268,9 @@ class AvaliacaoService {
       }
 
       if (kDebugMode) {
-        print('✓ ${avaliacoes.length} avaliações encontradas para carona: $caronaId');
+        print(
+          '✓ ${avaliacoes.length} avaliações encontradas para carona: $caronaId',
+        );
       }
 
       return avaliacoes;
@@ -225,7 +283,9 @@ class AvaliacaoService {
   }
 
   /// Lista todas as avaliações feitas por um usuário (avaliador)
-  Future<List<AvaliacaoModel>> listarAvaliacoesPorAvaliador(String usuarioId) async {
+  Future<List<AvaliacaoModel>> listarAvaliacoesPorAvaliador(
+    String usuarioId,
+  ) async {
     try {
       final querySnapshot = await _avaliacoesCollection
           .where('avaliador_usuario_id', isEqualTo: usuarioId)
@@ -246,7 +306,9 @@ class AvaliacaoService {
       }
 
       if (kDebugMode) {
-        print('✓ ${avaliacoes.length} avaliações encontradas feitas por: $usuarioId');
+        print(
+          '✓ ${avaliacoes.length} avaliações encontradas feitas por: $usuarioId',
+        );
       }
 
       return avaliacoes;
@@ -259,7 +321,9 @@ class AvaliacaoService {
   }
 
   /// Lista todas as avaliações recebidas por um usuário (avaliado)
-  Future<List<AvaliacaoModel>> listarAvaliacoesPorAvaliado(String usuarioId) async {
+  Future<List<AvaliacaoModel>> listarAvaliacoesPorAvaliado(
+    String usuarioId,
+  ) async {
     try {
       if (kDebugMode) {
         print('🔍 Buscando avaliações recebidas por: $usuarioId');
@@ -283,7 +347,9 @@ class AvaliacaoService {
       }
 
       if (kDebugMode) {
-        print('📊 Total de documentos encontrados: ${querySnapshot.docs.length}');
+        print(
+          '📊 Total de documentos encontrados: ${querySnapshot.docs.length}',
+        );
       }
 
       final avaliacoes = <AvaliacaoModel>[];
@@ -307,7 +373,9 @@ class AvaliacaoService {
       avaliacoes.sort((a, b) => b.dataAvaliacao.compareTo(a.dataAvaliacao));
 
       if (kDebugMode) {
-        print('✓ ${avaliacoes.length} avaliações encontradas recebidas por: $usuarioId');
+        print(
+          '✓ ${avaliacoes.length} avaliações encontradas recebidas por: $usuarioId',
+        );
       }
 
       return avaliacoes;
@@ -324,7 +392,7 @@ class AvaliacaoService {
     try {
       // Busca a avaliação antes de deletar para atualizar a média
       final doc = await _avaliacoesCollection.doc(avaliacaoId).get();
-      
+
       if (!doc.exists) {
         throw Exception('Avaliação não encontrada');
       }
@@ -377,7 +445,9 @@ class AvaliacaoService {
       // Validação: um usuário não pode avaliar a si mesmo
       if (avaliadorUsuarioId == avaliadoUsuarioId) {
         if (kDebugMode) {
-          print('⚠️ Ignorando verificação: usuário não pode avaliar a si mesmo');
+          print(
+            '⚠️ Ignorando verificação: usuário não pode avaliar a si mesmo',
+          );
         }
         return true; // Retorna true para evitar mostrar como pendente
       }
@@ -397,9 +467,11 @@ class AvaliacaoService {
           .get();
 
       final existe = querySnapshot.docs.isNotEmpty;
-      
+
       if (kDebugMode) {
-        print('${existe ? "✓" : "✗"} Avaliação ${existe ? "já existe" : "não existe"}');
+        print(
+          '${existe ? "✓" : "✗"} Avaliação ${existe ? "já existe" : "não existe"}',
+        );
       }
 
       return existe;
@@ -407,7 +479,9 @@ class AvaliacaoService {
       if (kDebugMode) {
         print('✗ Erro ao verificar avaliação existente: $e');
         if (e.toString().contains('permission-denied')) {
-          print('💡 Configure as regras do Firestore para permitir leitura na coleção "avaliacoes"');
+          print(
+            '💡 Configure as regras do Firestore para permitir leitura na coleção "avaliacoes"',
+          );
         }
       }
       // Retorna false em caso de erro para não bloquear o fluxo
@@ -426,7 +500,9 @@ class AvaliacaoService {
       final avaliacoes = await listarAvaliacoesPorAvaliado(usuarioId);
 
       // Filtra apenas avaliações com nota
-      final avaliacoesComNota = avaliacoes.where((a) => a.nota != null).toList();
+      final avaliacoesComNota = avaliacoes
+          .where((a) => a.nota != null)
+          .toList();
 
       if (avaliacoesComNota.isEmpty) {
         // Se não há avaliações com nota, remove o campo mediaAvaliacoes
@@ -451,7 +527,9 @@ class AvaliacaoService {
       });
 
       if (kDebugMode) {
-        print('✓ Média de avaliações atualizada para $usuarioId: $media (${avaliacoesComNota.length} avaliações)');
+        print(
+          '✓ Média de avaliações atualizada para $usuarioId: $media (${avaliacoesComNota.length} avaliações)',
+        );
       }
     } catch (e) {
       if (kDebugMode) {
@@ -567,12 +645,20 @@ class AvaliacaoService {
               CaronaPendenteAvaliacao(
                 caronaId: rideId,
                 avaliadoUsuarioId: passengerId,
-                avaliadoNome: requestData['passengerName'] as String? ?? 'Passageiro',
+                avaliadoNome:
+                    requestData['passengerName'] as String? ?? 'Passageiro',
                 avaliadoPhotoURL: requestData['passengerPhotoURL'] as String?,
                 tipo: 'passageiro',
-                dataCarona: (rideData['dateTime'] as Timestamp?)?.toDate() ?? DateTime.now(),
-                origem: (rideData['origin'] as Map<String, dynamic>?)?['address'] ?? 'Origem não informada',
-                destino: (rideData['destination'] as Map<String, dynamic>?)?['address'] ?? 'Destino não informado',
+                dataCarona:
+                    (rideData['dateTime'] as Timestamp?)?.toDate() ??
+                    DateTime.now(),
+                origem:
+                    (rideData['origin'] as Map<String, dynamic>?)?['address'] ??
+                    'Origem não informada',
+                destino:
+                    (rideData['destination']
+                        as Map<String, dynamic>?)?['address'] ??
+                    'Destino não informado',
               ),
             );
           }
@@ -580,7 +666,9 @@ class AvaliacaoService {
       }
 
       if (kDebugMode) {
-        print('✓ ${pendentes.length} caronas pendentes encontradas como motorista');
+        print(
+          '✓ ${pendentes.length} caronas pendentes encontradas como motorista',
+        );
       }
 
       return pendentes;
@@ -642,16 +730,25 @@ class AvaliacaoService {
               avaliadoNome: rideData['driverName'] as String? ?? 'Motorista',
               avaliadoPhotoURL: rideData['driverPhotoURL'] as String?,
               tipo: 'motorista',
-              dataCarona: (rideData['dateTime'] as Timestamp?)?.toDate() ?? DateTime.now(),
-              origem: (rideData['origin'] as Map<String, dynamic>?)?['address'] ?? 'Origem não informada',
-              destino: (rideData['destination'] as Map<String, dynamic>?)?['address'] ?? 'Destino não informado',
+              dataCarona:
+                  (rideData['dateTime'] as Timestamp?)?.toDate() ??
+                  DateTime.now(),
+              origem:
+                  (rideData['origin'] as Map<String, dynamic>?)?['address'] ??
+                  'Origem não informada',
+              destino:
+                  (rideData['destination']
+                      as Map<String, dynamic>?)?['address'] ??
+                  'Destino não informado',
             ),
           );
         }
       }
 
       if (kDebugMode) {
-        print('✓ ${pendentes.length} caronas pendentes encontradas como passageiro');
+        print(
+          '✓ ${pendentes.length} caronas pendentes encontradas como passageiro',
+        );
       }
 
       return pendentes;
@@ -668,11 +765,15 @@ class AvaliacaoService {
     String usuarioId,
   ) async {
     try {
-      final comoMotorista = await buscarCaronasPendentesComoMotorista(usuarioId);
-      final comoPassageiro = await buscarCaronasPendentesComoPassageiro(usuarioId);
+      final comoMotorista = await buscarCaronasPendentesComoMotorista(
+        usuarioId,
+      );
+      final comoPassageiro = await buscarCaronasPendentesComoPassageiro(
+        usuarioId,
+      );
 
       final todas = [...comoMotorista, ...comoPassageiro];
-      
+
       // Ordena por data mais recente
       todas.sort((a, b) => b.dataCarona.compareTo(a.dataCarona));
 
