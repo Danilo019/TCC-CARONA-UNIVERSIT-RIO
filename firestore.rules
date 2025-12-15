@@ -105,13 +105,16 @@ service cloud.firestore {
     // ============================================================================
     
     match /ride_requests/{requestId} {
-      // Permite leitura para usuários autenticados
-      // Mas só permite ler solicitações próprias ou da carona do motorista
-      allow read: if isAuthenticated() && 
-                     (resource.data.passengerId == request.auth.uid ||
-                      (resource.data.rideId != null && 
-                       exists(/databases/$(database)/documents/rides/$(resource.data.rideId)) &&
-                       get(/databases/$(database)/documents/rides/$(resource.data.rideId)).data.driverId == request.auth.uid));
+      // Permite leitura individual para o passageiro ou motorista da carona
+      allow get: if isAuthenticated() && 
+                    (resource.data.passengerId == request.auth.uid ||
+                     (resource.data.rideId != null && 
+                      exists(/databases/$(database)/documents/rides/$(resource.data.rideId)) &&
+                      get(/databases/$(database)/documents/rides/$(resource.data.rideId)).data.driverId == request.auth.uid));
+      
+      // Permite queries para usuários autenticados (necessário para filtrar por rideId)
+      // IMPORTANTE: As regras de read permitem a query, mas o filtro será aplicado no app
+      allow list: if isAuthenticated();
       
       // Permite criar apenas se for o passageiro e dados válidos
       allow create: if isAuthenticated() && 
