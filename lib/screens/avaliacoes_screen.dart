@@ -82,20 +82,49 @@ class _AvaliacoesScreenState extends State<AvaliacoesScreen> {
 
   /// Busca o nome de um usuário pelo ID com cache local
   Future<String> _buscarNomeUsuario(String usuarioId) async {
+    if (kDebugMode) {
+      print('🔍 _buscarNomeUsuario chamado para: $usuarioId');
+    }
+
+    // Valida ID
+    if (usuarioId.isEmpty) {
+      if (kDebugMode) {
+        print('⚠️ ID vazio fornecido');
+      }
+      return 'Usuário Desconhecido';
+    }
+
     // Retorna do cache se já existe
     if (_cacheNomes.containsKey(usuarioId)) {
+      if (kDebugMode) {
+        print('✓ Nome encontrado no cache: ${_cacheNomes[usuarioId]}');
+      }
       return _cacheNomes[usuarioId]!;
     }
 
     try {
+      if (kDebugMode) {
+        print('📡 Buscando nome no Firestore...');
+      }
+
       final nome = await _avaliacaoService.buscarNomeUsuarioPorId(usuarioId);
+
+      if (kDebugMode) {
+        print('✓ Nome retornado do serviço: $nome');
+      }
+
+      // Salva no cache
       _cacheNomes[usuarioId] = nome;
+
       return nome;
     } catch (e) {
       if (kDebugMode) {
-        print('✗ Erro ao buscar nome: $e');
+        print('✗ Erro ao buscar nome do usuário $usuarioId: $e');
+        print('   Stack trace: ${StackTrace.current}');
       }
-      return 'Usuário';
+
+      // Retorna fallback mas não salva no cache para tentar novamente depois
+      return 'Usuário (Erro: ${e.toString().substring(0, 20)}...)';
     }
   }
 
@@ -210,6 +239,84 @@ class _AvaliacoesScreenState extends State<AvaliacoesScreen> {
     }
   }
 
+  /// Mostra informações de debug (apenas em modo debug)
+  void _mostrarInfoDebug() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final user = authProvider.user;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Debug - Avaliações'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '👤 Usuário Atual:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              Text('  UID: ${user?.uid ?? "N/A"}'),
+              Text('  Email: ${user?.email ?? "N/A"}'),
+              Text('  Nome: ${user?.displayName ?? "N/A"}'),
+              const Divider(),
+              Text(
+                '📊 Estatísticas:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              Text('  Avaliações recebidas: ${_avaliacoesRecebidas.length}'),
+              Text('  Nomes em cache: ${_cacheNomes.length}'),
+              const Divider(),
+              Text(
+                '🔍 IDs dos Avaliadores:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              ..._avaliacoesRecebidas
+                  .take(5)
+                  .map(
+                    (av) => Padding(
+                      padding: const EdgeInsets.only(left: 8.0, top: 4),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'ID: ${av.avaliadorUsuarioId}',
+                            style: TextStyle(fontSize: 10),
+                          ),
+                          Text(
+                            'Nome cache: ${_cacheNomes[av.avaliadorUsuarioId] ?? "não carregado"}',
+                            style: TextStyle(fontSize: 10, color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Fechar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // Copia info para clipboard seria útil aqui
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Verifique o console para logs detalhados'),
+                ),
+              );
+            },
+            child: const Text('Ver Logs'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -219,6 +326,42 @@ class _AvaliacoesScreenState extends State<AvaliacoesScreen> {
         backgroundColor: const Color(0xFF2196F3),
         foregroundColor: Colors.white,
         elevation: 0,
+        actions: [
+          // Botão de debug/refresh
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Atualizar e Limpar Cache',
+            onPressed: () async {
+              // Limpa cache local
+              setState(() {
+                _cacheNomes.clear();
+              });
+
+              // Limpa cache do serviço
+              _avaliacaoService.limparCacheNomes();
+
+              // Recarrega dados
+              await _carregarAvaliacoesRecebidas();
+
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Cache limpo e dados atualizados!'),
+                    backgroundColor: Colors.green,
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              }
+            },
+          ),
+          // Botão de debug detalhado (apenas em modo debug)
+          if (kDebugMode)
+            IconButton(
+              icon: const Icon(Icons.bug_report),
+              tooltip: 'Debug Info',
+              onPressed: _mostrarInfoDebug,
+            ),
+        ],
       ),
       body: Column(
         children: [
