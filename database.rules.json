@@ -14,13 +14,13 @@
           ".validate": "newData.isString() && newData.val() == auth.uid"
         },
         "senderName": {
-          ".validate": "newData.isString()"
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100"
         },
         "senderPhotoURL": {
           ".validate": "newData.isString() || !newData.exists()"
         },
         "message": {
-          ".validate": "newData.isString()"
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 5000"
         },
         "isDriver": {
           ".validate": "newData.isBoolean()"

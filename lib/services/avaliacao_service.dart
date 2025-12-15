@@ -46,6 +46,23 @@ class AvaliacaoService {
     }
   }
 
+  /// Busca o nome de um usuário pelo ID
+  Future<String?> buscarNomeUsuarioPorId(String usuarioId) async {
+    try {
+      final doc = await _usuariosCollection.doc(usuarioId).get();
+      if (doc.exists) {
+        final data = doc.data() as Map<String, dynamic>?;
+        return data?['displayName'] ?? data?['email']?.toString().split('@')[0] ?? 'Usuário';
+      }
+      return null;
+    } catch (e) {
+      if (kDebugMode) {
+        print('✗ Erro ao buscar nome do usuário: $e');
+      }
+      return null;
+    }
+  }
+
   /// Valida todas as referências antes de criar uma avaliação
   Future<void> _validarReferencias({
     required String caronaId,
@@ -244,15 +261,39 @@ class AvaliacaoService {
   /// Lista todas as avaliações recebidas por um usuário (avaliado)
   Future<List<AvaliacaoModel>> listarAvaliacoesPorAvaliado(String usuarioId) async {
     try {
-      final querySnapshot = await _avaliacoesCollection
-          .where('avaliado_usuario_id', isEqualTo: usuarioId)
-          .orderBy('data_avaliacao', descending: true)
-          .get();
+      if (kDebugMode) {
+        print('🔍 Buscando avaliações recebidas por: $usuarioId');
+      }
+
+      // Tenta primeiro com orderBy
+      QuerySnapshot querySnapshot;
+      try {
+        querySnapshot = await _avaliacoesCollection
+            .where('avaliado_usuario_id', isEqualTo: usuarioId)
+            .orderBy('data_avaliacao', descending: true)
+            .get();
+      } catch (e) {
+        // Se falhar (falta de índice), busca sem orderBy
+        if (kDebugMode) {
+          print('⚠️ Índice não encontrado, buscando sem orderBy: $e');
+        }
+        querySnapshot = await _avaliacoesCollection
+            .where('avaliado_usuario_id', isEqualTo: usuarioId)
+            .get();
+      }
+
+      if (kDebugMode) {
+        print('📊 Total de documentos encontrados: ${querySnapshot.docs.length}');
+      }
 
       final avaliacoes = <AvaliacaoModel>[];
 
       for (var doc in querySnapshot.docs) {
         try {
+          if (kDebugMode) {
+            print('📄 Processando avaliação: ${doc.id}');
+            print('   Dados: ${doc.data()}');
+          }
           final avaliacao = AvaliacaoModel.fromFirestore(doc);
           avaliacoes.add(avaliacao);
         } catch (e) {
@@ -261,6 +302,9 @@ class AvaliacaoService {
           }
         }
       }
+
+      // Ordena manualmente se não foi possível usar orderBy no Firestore
+      avaliacoes.sort((a, b) => b.dataAvaliacao.compareTo(a.dataAvaliacao));
 
       if (kDebugMode) {
         print('✓ ${avaliacoes.length} avaliações encontradas recebidas por: $usuarioId');
@@ -330,6 +374,14 @@ class AvaliacaoService {
     required String avaliadoUsuarioId,
   }) async {
     try {
+      // Validação: um usuário não pode avaliar a si mesmo
+      if (avaliadorUsuarioId == avaliadoUsuarioId) {
+        if (kDebugMode) {
+          print('⚠️ Ignorando verificação: usuário não pode avaliar a si mesmo');
+        }
+        return true; // Retorna true para evitar mostrar como pendente
+      }
+
       if (kDebugMode) {
         print('🔍 Verificando avaliação existente:');
         print('  - Carona ID: $caronaId');
@@ -498,6 +550,11 @@ class AvaliacaoService {
           final requestData = requestDoc.data();
           final passengerId = requestData['passengerId'] as String;
 
+          // Ignora se for o próprio motorista (regra de negócio: não pode avaliar a si mesmo)
+          if (passengerId == motoristaId) {
+            continue;
+          }
+
           // Verifica se já avaliou este passageiro
           final jaAvaliado = await verificarAvaliacaoExistente(
             caronaId: rideId,
@@ -564,6 +621,11 @@ class AvaliacaoService {
         if (status != 'completed') continue;
 
         final driverId = rideData['driverId'] as String;
+
+        // Ignora se for o próprio passageiro (regra de negócio: não pode avaliar a si mesmo)
+        if (driverId == passageiroId) {
+          continue;
+        }
 
         // Verifica se já avaliou o motorista
         final jaAvaliado = await verificarAvaliacaoExistente(

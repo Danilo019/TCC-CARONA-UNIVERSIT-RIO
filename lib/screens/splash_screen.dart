@@ -146,7 +146,7 @@ class _SplashScreenState extends State<SplashScreen>
                 child: const Column(
                   children: [
                     Text(
-                      'Carona Uni',
+                      'Carona Universitária',
                       style: TextStyle(
                         fontSize: 42,
                         fontWeight: FontWeight.bold,
@@ -237,7 +237,7 @@ class _SimpleSplashScreenState extends State<SimpleSplashScreen> {
               ),
               SizedBox(height: 20),
               Text(
-                'Carona Uni',
+                'Carona Universitária',
                 style: TextStyle(
                   fontSize: 36,
                   fontWeight: FontWeight.bold,

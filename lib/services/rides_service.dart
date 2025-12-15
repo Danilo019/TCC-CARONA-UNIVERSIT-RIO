@@ -15,7 +15,8 @@ class RidesService {
   static const int _defaultLimit = 100;
   static const int _nearbyQueryLimit = 50;
   static const int _geohashPrecision = 7;
-  static const Duration _driverConflictWindow = Duration(hours: 2);
+  // Janela de conflito: 1 hora antes e 1 hora depois (total 2h de proteção)
+  static const Duration _driverConflictWindow = Duration(hours: 1);
 
   /// Collection reference para caronas
   CollectionReference get _ridesCollection => _firestore.collection('rides');
@@ -212,9 +213,21 @@ class RidesService {
     });
 
     if (hasConflict) {
+      // Busca informações da carona conflitante para mensagem mais útil
+      final conflictingRide = snapshot.docs.firstWhere((doc) {
+        if (ignoreRideId != null && doc.id == ignoreRideId) return false;
+        final data = doc.data() as Map<String, dynamic>? ?? {};
+        final status = (data['status'] as String?) ?? 'active';
+        return status == 'active' || status == 'in_progress';
+      });
+      
+      final conflictData = conflictingRide.data() as Map<String, dynamic>;
+      final conflictTime = (conflictData['dateTime'] as Timestamp).toDate();
+      
       throw Exception(
-        'Já existe uma carona agendada para este motorista no intervalo de 2 horas. '
-        'Ajuste o horário para evitar conflitos.',
+        'Conflito de horário detectado!\n\n'
+        'Você já tem uma carona agendada para ${conflictTime.hour}:${conflictTime.minute.toString().padLeft(2, '0')}.\n'
+        'Para evitar sobrecarga, ajuste o horário com pelo menos 1 hora de diferença.',
       );
     }
   }

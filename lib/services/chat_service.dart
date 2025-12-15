@@ -150,6 +150,7 @@ class ChatService {
     required bool isDriver,
   }) async {
     try {
+      // Validações de entrada
       if (message.trim().isEmpty) {
         if (kDebugMode) {
           print('⚠ Mensagem vazia, não enviando');
@@ -157,11 +158,21 @@ class ChatService {
         return null;
       }
 
+      if (rideId.trim().isEmpty || senderId.trim().isEmpty || senderName.trim().isEmpty) {
+        if (kDebugMode) {
+          print('✗ Dados inválidos: rideId, senderId ou senderName vazios');
+          print('  rideId: "$rideId"');
+          print('  senderId: "$senderId"');
+          print('  senderName: "$senderName"');
+        }
+        throw Exception('Dados obrigatórios inválidos');
+      }
+
       // Remove senderPhotoURL se for null para evitar problemas com regras do Firebase
       final messageMap = <String, dynamic>{
-        'rideId': rideId,
-        'senderId': senderId,
-        'senderName': senderName,
+        'rideId': rideId.trim(),
+        'senderId': senderId.trim(),
+        'senderName': senderName.trim(),
         'message': message.trim(),
         'isDriver': isDriver,
         'timestamp': DateTime.now().millisecondsSinceEpoch,
@@ -191,9 +202,15 @@ class ChatService {
       }
 
       return messageRef.key;
+    } on Exception catch (e, stackTrace) {
+      if (kDebugMode) {
+        print('✗ Erro ao enviar mensagem (Exception): $e');
+        print('Stack trace: $stackTrace');
+      }
+      rethrow;
     } catch (e, stackTrace) {
       if (kDebugMode) {
-        print('✗ Erro ao enviar mensagem: $e');
+        print('✗ Erro inesperado ao enviar mensagem: $e');
         print('Stack trace: $stackTrace');
       }
       return null;

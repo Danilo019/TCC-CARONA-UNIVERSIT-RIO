@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/avaliacao_service.dart';
 import '../models/carona_pendente_avaliacao.dart';
+import '../models/avaliacao_model.dart';
 import '../widgets/avaliacao_dialog.dart';
 
 /// Tela dedicada para avaliações
@@ -19,13 +20,16 @@ class AvaliacoesScreen extends StatefulWidget {
 class _AvaliacoesScreenState extends State<AvaliacoesScreen> {
   final AvaliacaoService _avaliacaoService = AvaliacaoService();
   List<CaronaPendenteAvaliacao> _caronasPendentes = [];
+  List<AvaliacaoModel> _avaliacoesRecebidas = [];
   bool _isLoading = true;
-  int _selectedTab = 0; // 0: Pendentes, 1: Sistema
+  bool _isLoadingRecebidas = false;
+  int _selectedTab = 0; // 0: Pendentes, 1: Recebidas, 2: Sistema
 
   @override
   void initState() {
     super.initState();
     _carregarCaronasPendentes();
+    _carregarAvaliacoesRecebidas();
   }
 
   /// Carrega caronas pendentes de avaliação
@@ -64,6 +68,70 @@ class _AvaliacoesScreenState extends State<AvaliacoesScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Erro ao carregar avaliações pendentes: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Busca o nome de um usuário pelo ID
+  Future<String> _buscarNomeUsuario(String usuarioId) async {
+    try {
+      final doc = await _avaliacaoService.buscarNomeUsuarioPorId(usuarioId);
+      return doc ?? 'Usuário';
+    } catch (e) {
+      return 'Usuário';
+    }
+  }
+
+  /// Carrega avaliações recebidas pelo usuário
+  Future<void> _carregarAvaliacoesRecebidas() async {
+    setState(() {
+      _isLoadingRecebidas = true;
+    });
+
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final user = authProvider.user;
+
+      if (user == null) {
+        if (kDebugMode) {
+          print('⚠️ Usuário não autenticado ao carregar avaliações recebidas');
+        }
+        setState(() {
+          _isLoadingRecebidas = false;
+        });
+        return;
+      }
+
+      if (kDebugMode) {
+        print('🔄 Carregando avaliações recebidas para: ${user.uid}');
+      }
+
+      final recebidas = await _avaliacaoService.listarAvaliacoesPorAvaliado(user.uid);
+
+      if (kDebugMode) {
+        print('✓ ${recebidas.length} avaliações recebidas carregadas');
+      }
+
+      if (mounted) {
+        setState(() {
+          _avaliacoesRecebidas = recebidas;
+          _isLoadingRecebidas = false;
+        });
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('✗ Erro ao carregar avaliações recebidas: $e');
+      }
+      if (mounted) {
+        setState(() {
+          _isLoadingRecebidas = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao carregar avaliações recebidas: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -152,8 +220,15 @@ class _AvaliacoesScreenState extends State<AvaliacoesScreen> {
                 ),
                 Expanded(
                   child: _buildTabButton(
-                    label: 'Avaliar Sistema',
+                    label: 'Recebidas',
                     index: 1,
+                    icon: Icons.star,
+                  ),
+                ),
+                Expanded(
+                  child: _buildTabButton(
+                    label: 'Sistema',
+                    index: 2,
                     icon: Icons.star_rate,
                   ),
                 ),
@@ -166,7 +241,9 @@ class _AvaliacoesScreenState extends State<AvaliacoesScreen> {
           Expanded(
             child: _selectedTab == 0
                 ? _buildPendentesTab()
-                : _buildSistemaTab(),
+                : _selectedTab == 1
+                    ? _buildRecebidasTab()
+                    : _buildSistemaTab(),
           ),
         ],
       ),
@@ -185,6 +262,10 @@ class _AvaliacoesScreenState extends State<AvaliacoesScreen> {
         setState(() {
           _selectedTab = index;
         });
+        // Recarrega os dados quando mudar para a aba de recebidas
+        if (index == 1) {
+          _carregarAvaliacoesRecebidas();
+        }
       },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16),
@@ -269,6 +350,206 @@ class _AvaliacoesScreenState extends State<AvaliacoesScreen> {
           final carona = _caronasPendentes[index];
           return _buildCaronaCard(carona);
         },
+      ),
+    );
+  }
+
+  /// Tab de avaliações recebidas
+  Widget _buildRecebidasTab() {
+    if (_isLoadingRecebidas) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
+
+    if (_avaliacoesRecebidas.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.star_border,
+              size: 80,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Nenhuma avaliação recebida',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Complete caronas para receber avaliações',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[500],
+              ),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _carregarAvaliacoesRecebidas,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Atualizar'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2196F3),
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _carregarAvaliacoesRecebidas,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: _avaliacoesRecebidas.length,
+        itemBuilder: (context, index) {
+          final avaliacao = _avaliacoesRecebidas[index];
+          return _buildAvaliacaoRecebidaCard(avaliacao);
+        },
+      ),
+    );
+  }
+
+  /// Card de avaliação recebida
+  Widget _buildAvaliacaoRecebidaCard(AvaliacaoModel avaliacao) {
+    final nota = avaliacao.nota ?? 0;
+    final comentario = avaliacao.comentario ?? '';
+    final dataAvaliacao = avaliacao.dataAvaliacao;
+
+    // Define cor baseada na nota
+    Color notaColor;
+    if (nota >= 4) {
+      notaColor = Colors.green;
+    } else if (nota >= 3) {
+      notaColor = Colors.orange;
+    } else {
+      notaColor = Colors.red;
+    }
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 20,
+                        backgroundColor: Colors.grey[300],
+                        child: const Icon(Icons.person, color: Colors.white),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            FutureBuilder<String>(
+                              future: _buscarNomeUsuario(avaliacao.avaliadorUsuarioId),
+                              builder: (context, snapshot) {
+                                return Text(
+                                  snapshot.data ?? 'Carregando...',
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                );
+                              },
+                            ),
+                            Text(
+                              DateFormat('dd/MM/yyyy HH:mm').format(dataAvaliacao),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: notaColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.star, size: 18, color: notaColor),
+                      const SizedBox(width: 4),
+                      Text(
+                        nota.toStringAsFixed(1),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: notaColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (comentario.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey[200]!),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.comment, size: 16, color: Colors.grey[600]),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        comentario,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[800],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Row(
+              children: List.generate(
+                5,
+                (index) => Icon(
+                  index < nota ? Icons.star : Icons.star_border,
+                  color: Colors.amber,
+                  size: 20,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
