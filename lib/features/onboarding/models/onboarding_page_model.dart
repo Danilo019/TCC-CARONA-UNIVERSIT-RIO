@@ -36,7 +36,7 @@ class OnboardingData {
       title: 'Bem-vindo à Carona Universitária!',
       description:
           'Conecte-se com colegas da sua universidade e compartilhe caronas de forma segura, prática e econômica. Sua jornada acadêmica começa aqui!',
-      imagePath: 'assets/images/background_android.png',
+      imagePath: 'assets/images/carona_universitaria(1).png',
     ),
     OnboardingPageModel(
       title: 'Ofereça ou Encontre Caronas',
