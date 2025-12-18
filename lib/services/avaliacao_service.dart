@@ -1,3 +1,6 @@
+// Serviço de avaliações - gerencia sistema de reputação de usuários
+// Valida referências, impede autoavaliação e calcula médias de notas
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import '../models/avaliacao_model.dart';

@@ -1,3 +1,6 @@
+// Cloud Functions para Firebase - gerencia tokens de ativação e reset de senha
+// Executa operações privilegiadas usando Firebase Admin SDK
+
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 
@@ -14,12 +17,8 @@ const generateSixDigitToken = () => {
   return token.toString();
 };
 
-/**
- * Emite um token de ativação ou reset de senha.
- *
- * Recebe: { email, purpose? }
- * Retorna: { token, email, createdAt, expiresAt, isUsed, purpose }
- */
+// Função cloud que gera tokens de 6 dígitos para ativação de conta ou reset de senha
+// Valida email institucional e garante unicidade do token
 exports.issueActivationToken = functions.https.onCall(async (data, context) => {
   try {
     const { email, purpose = 'activation' } = data;

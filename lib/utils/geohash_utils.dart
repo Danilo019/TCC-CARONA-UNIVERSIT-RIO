@@ -1,7 +1,10 @@
+// Utilitário de geohash para consultas geoespaciais eficientes
+// Codifica lat/lng em strings para permitir buscas por proximidade no Firestore
+
 import 'dart:math';
 
-/// Utilidades para trabalhar com geohash, usadas para consultas geoespaciais
-/// de caronas próximas.
+// Classe de utilidades para trabalhar com geohash
+// Permite buscas de caronas próximas sem usar queries geoespaciais complexas
 class GeohashUtils {
   GeohashUtils._();
 
@@ -14,16 +17,22 @@ class GeohashUtils {
   };
 
   static final Map<String, List<String>> _neighbors = {
-    'even': ['bc01fg45238967deuvhjyznpkmstqrwx', '238967debc01fg45kmstqrwxuvhjyznp', 'p0r21436x8zb9dcf5h7kjnmqesgutwvy', '14365h7k9dcfesgujnmqp0r2twvyx8zb'],
-    'odd': ['p0r21436x8zb9dcf5h7kjnmqesgutwvy', '14365h7k9dcfesgujnmqp0r2twvyx8zb', 'bc01fg45238967deuvhjyznpkmstqrwx', '238967debc01fg45kmstqrwxuvhjyznp'],
+    'even': [
+      'bc01fg45238967deuvhjyznpkmstqrwx',
+      '238967debc01fg45kmstqrwxuvhjyznp',
+      'p0r21436x8zb9dcf5h7kjnmqesgutwvy',
+      '14365h7k9dcfesgujnmqp0r2twvyx8zb',
+    ],
+    'odd': [
+      'p0r21436x8zb9dcf5h7kjnmqesgutwvy',
+      '14365h7k9dcfesgujnmqp0r2twvyx8zb',
+      'bc01fg45238967deuvhjyznpkmstqrwx',
+      '238967debc01fg45kmstqrwxuvhjyznp',
+    ],
   };
 
   /// Codifica latitude/longitude em geohash.
-  static String encode(
-    double latitude,
-    double longitude, {
-    int precision = 7,
-  }) {
+  static String encode(double latitude, double longitude, {int precision = 7}) {
     assert(precision > 0, 'Precisão deve ser maior que zero');
 
     double latMin = -90.0;
@@ -160,10 +169,14 @@ class GeohashUtils {
     final minLat = latitude - (angularDistance * 180 / pi);
     final maxLat = latitude + (angularDistance * 180 / pi);
 
-    final minLon = longitude -
-        (angularDistance * 180 / pi) / cos(latRad.clamp(-pi / 2 + 1e-6, pi / 2 - 1e-6));
-    final maxLon = longitude +
-        (angularDistance * 180 / pi) / cos(latRad.clamp(-pi / 2 + 1e-6, pi / 2 - 1e-6));
+    final minLon =
+        longitude -
+        (angularDistance * 180 / pi) /
+            cos(latRad.clamp(-pi / 2 + 1e-6, pi / 2 - 1e-6));
+    final maxLon =
+        longitude +
+        (angularDistance * 180 / pi) /
+            cos(latRad.clamp(-pi / 2 + 1e-6, pi / 2 - 1e-6));
 
     return _BoundingBox(
       minLat: min(max(minLat, -90), 90),
@@ -174,12 +187,7 @@ class GeohashUtils {
   }
 }
 
-enum _Direction {
-  top,
-  bottom,
-  right,
-  left,
-}
+enum _Direction { top, bottom, right, left }
 
 class _BoundingBox {
   final double minLat;
@@ -194,4 +202,3 @@ class _BoundingBox {
     required this.maxLon,
   });
 }
-

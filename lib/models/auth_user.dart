@@ -1,3 +1,6 @@
+// Modelo de dados do usuário autenticado
+// Abstrai informações do Firebase User para uso interno do app
+
 class AuthUser {
   final String uid;
   final String email;
@@ -38,11 +41,11 @@ class AuthUser {
       displayName: map['displayName'],
       photoURL: map['photoURL'],
       emailVerified: map['emailVerified'] ?? false,
-      creationTime: map['creationTime'] != null 
-          ? DateTime.parse(map['creationTime']) 
+      creationTime: map['creationTime'] != null
+          ? DateTime.parse(map['creationTime'])
           : null,
-      lastSignInTime: map['lastSignInTime'] != null 
-          ? DateTime.parse(map['lastSignInTime']) 
+      lastSignInTime: map['lastSignInTime'] != null
+          ? DateTime.parse(map['lastSignInTime'])
           : null,
     );
   }
@@ -62,8 +65,7 @@ class AuthUser {
 
   /// Verifica se o email é da UDF
   bool get isUDFEmail {
-    return email.endsWith('@udf.edu.br') || 
-           email.endsWith('@cs.udf.edu.br');
+    return email.endsWith('@udf.edu.br') || email.endsWith('@cs.udf.edu.br');
   }
 
   /// Obtém o nome de exibição ou email como fallback
@@ -100,9 +102,7 @@ class AuthUser {
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
-    return other is AuthUser &&
-        other.uid == uid &&
-        other.email == email;
+    return other is AuthUser && other.uid == uid && other.email == email;
   }
 
   @override

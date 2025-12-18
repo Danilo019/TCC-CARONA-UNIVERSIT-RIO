@@ -1,3 +1,6 @@
+// Serviço de notificações push usando Firebase Cloud Messaging
+// Gerencia permissões, tokens FCM e notificações locais agendadas
+
 import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';

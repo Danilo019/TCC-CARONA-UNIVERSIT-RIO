@@ -1,3 +1,6 @@
+// Tela principal do aplicativo após login
+// Exibe mapa com caronas disponíveis, botões de ação e navegação inferior
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -17,13 +20,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'trip_history_screen.dart';
 
-/// Tela principal do aplicativo após o onboarding
-/// 
-/// Exibe:
-/// - Saudação personalizada com botão de perfil
-/// - Dois botões de ação: "Motorista" e "Passageiro"
-/// - Mapa interativo com marcadores de caronas disponíveis
-/// - Navegação inferior com 4 opções: Início, Viagens, Mensagens, Perfil
+// Widget principal da home - gerencia estado do mapa, localização e navegação
+// Integra múltiplos serviços: localização, caronas, chat e notificações
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -61,7 +59,10 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Carrega conversas (caronas com solicitações aceitas)
   Future<void> _loadChats() async {
     try {
-      final authProvider = Provider.of<app_auth.AuthProvider>(context, listen: false);
+      final authProvider = Provider.of<app_auth.AuthProvider>(
+        context,
+        listen: false,
+      );
       final user = authProvider.user;
 
       if (user == null) return;
@@ -101,16 +102,20 @@ class _HomeScreenState extends State<HomeScreen> {
         // Usa lista vazia como fallback
         myRides = [];
       }
-      
+
       // Carrega solicitações aceitas do passageiro - com tratamento de erro
       List<RideRequest> acceptedRequests = [];
       try {
-        final requests = await _rideRequestService.getRequestsByPassenger(user.uid);
+        final requests = await _rideRequestService.getRequestsByPassenger(
+          user.uid,
+        );
         acceptedRequests = requests.where((r) => r.isAccepted).toList();
       } catch (e) {
         if (kDebugMode) {
           print('⚠ Erro ao carregar solicitações (permissão negada): $e');
-          print('💡 Configure as regras do Firestore para permitir leitura de ride_requests');
+          print(
+            '💡 Configure as regras do Firestore para permitir leitura de ride_requests',
+          );
         }
         // Continua sem solicitações, não quebra a aplicação
       }
@@ -134,7 +139,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
   }
-  
+
   /// Carrega caronas do Firestore
   Future<void> _loadRides() async {
     try {
@@ -166,7 +171,7 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       // Verifica se já tem permissão
       final hasPermission = await _locationService.hasLocationPermission();
-      
+
       if (hasPermission) {
         // Obtém localização atual
         await _getCurrentLocation();
@@ -198,7 +203,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _getCurrentLocation() async {
     try {
       final position = await _locationService.getCurrentLocation();
-      
+
       if (position != null) {
         final location = Location(
           latitude: position.latitude,
@@ -208,14 +213,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
         // Faz reverse geocoding para obter endereço
         final geocodeResult = await _googleMapsService.reverseGeocode(location);
-        
+
         if (mounted) {
           setState(() {
             _userLocation = geocodeResult?.location ?? location;
           });
-          
+
           if (kDebugMode) {
-            print('✓ Localização atualizada: ${_userLocation!.latitude}, ${_userLocation!.longitude}');
+            print(
+              '✓ Localização atualizada: ${_userLocation!.latitude}, ${_userLocation!.longitude}',
+            );
             if (geocodeResult != null) {
               print('✓ Endereço: ${geocodeResult.formattedAddress}');
             }
@@ -232,7 +239,7 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Inicia monitoramento de localização em tempo real
   void _startLocationMonitoring() {
     _locationSubscription?.cancel();
-    
+
     _locationSubscription = _locationService.watchPosition().listen(
       (Position position) async {
         final location = Location(
@@ -246,9 +253,11 @@ class _HomeScreenState extends State<HomeScreen> {
           setState(() {
             _userLocation = location;
           });
-          
+
           if (kDebugMode) {
-            print('📍 Localização atualizada em tempo real: ${location.latitude}, ${location.longitude}');
+            print(
+              '📍 Localização atualizada em tempo real: ${location.latitude}, ${location.longitude}',
+            );
           }
         }
       },
@@ -277,16 +286,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 20),
 
                   // Mapa com caronas disponíveis
-                  Expanded(
-                    child: _buildMapSection(),
-                  ),
+                  Expanded(child: _buildMapSection()),
                 ],
               )
             : _selectedIndex == 2
-                ? _buildMessagesScreen()
-                : _selectedIndex == 1
-                    ? _buildTripsScreen()
-                    : const SizedBox.shrink(),
+            ? _buildMessagesScreen()
+            : _selectedIndex == 1
+            ? _buildTripsScreen()
+            : const SizedBox.shrink(),
       ),
       // Navegação inferior
       bottomNavigationBar: _buildBottomNavigationBar(),
@@ -300,7 +307,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final user = authProvider.user;
         final displayName = user?.displayNameOrEmail ?? "Usuário";
         final photoURL = user?.photoURL;
-        
+
         return Padding(
           padding: const EdgeInsets.all(20),
           child: Row(
@@ -361,7 +368,11 @@ class _HomeScreenState extends State<HomeScreen> {
                             },
                           ),
                         )
-                      : const Icon(Icons.person_outline, size: 28, color: Colors.black87),
+                      : const Icon(
+                          Icons.person_outline,
+                          size: 28,
+                          color: Colors.black87,
+                        ),
                 ),
               ),
             ],
@@ -386,7 +397,9 @@ class _HomeScreenState extends State<HomeScreen> {
               textColor: Colors.white,
               onTap: () async {
                 // Navega para tela de motorista
-                final result = await Navigator.of(context).pushNamed('/motorist');
+                final result = await Navigator.of(
+                  context,
+                ).pushNamed('/motorist');
                 // Atualiza o mapa se uma carona foi criada
                 if (result == true && mounted) {
                   await _loadRides();
@@ -446,11 +459,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         child: Column(
           children: [
-            Icon(
-              icon,
-              size: 36,
-              color: textColor,
-            ),
+            Icon(icon, size: 36, color: textColor),
             const SizedBox(height: 8),
             Text(
               label,
@@ -485,9 +494,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(20),
           child: _isLoadingLocation
-              ? const Center(
-                  child: CircularProgressIndicator(),
-                )
+              ? const Center(child: CircularProgressIndicator())
               : MapWidget(
                   // Usa localização do usuário se disponível
                   initialLocation: _userLocation,
@@ -497,7 +504,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   },
                   onMapTap: (location) {
                     if (kDebugMode) {
-                      print('Mapa tocado em: ${location.latitude}, ${location.longitude}');
+                      print(
+                        'Mapa tocado em: ${location.latitude}, ${location.longitude}',
+                      );
                     }
                   },
                   showUserLocation: true,
@@ -507,7 +516,6 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-
 
   /// Constrói a barra de navegação inferior
   Widget _buildBottomNavigationBar() {
@@ -578,7 +586,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         minHeight: 16,
                       ),
                       child: Text(
-                        _totalUnreadMessages > 99 ? '99+' : _totalUnreadMessages.toString(),
+                        _totalUnreadMessages > 99
+                            ? '99+'
+                            : _totalUnreadMessages.toString(),
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 10,
@@ -608,7 +618,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         minHeight: 16,
                       ),
                       child: Text(
-                        _totalUnreadMessages > 99 ? '99+' : _totalUnreadMessages.toString(),
+                        _totalUnreadMessages > 99
+                            ? '99+'
+                            : _totalUnreadMessages.toString(),
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 10,
@@ -634,13 +646,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Constrói a tela de mensagens
   Widget _buildMessagesScreen() {
-    final authProvider = Provider.of<app_auth.AuthProvider>(context, listen: false);
+    final authProvider = Provider.of<app_auth.AuthProvider>(
+      context,
+      listen: false,
+    );
     final user = authProvider.user;
 
     if (user == null) {
-      return const Center(
-        child: Text('Faça login para ver suas mensagens'),
-      );
+      return const Center(child: Text('Faça login para ver suas mensagens'));
     }
 
     // Usa StreamBuilder para atualizar conversas em tempo real
@@ -648,7 +661,8 @@ class _HomeScreenState extends State<HomeScreen> {
       stream: _watchChatList(user.uid),
       builder: (context, snapshot) {
         // Mostra loading apenas na primeira vez
-        if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
 
@@ -658,11 +672,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  Icons.error_outline,
-                  size: 64,
-                  color: Colors.grey[400],
-                ),
+                Icon(Icons.error_outline, size: 64, color: Colors.grey[400]),
                 const SizedBox(height: 16),
                 Text(
                   'Erro ao carregar conversas',
@@ -677,10 +687,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 32),
                   child: Text(
                     'Verifique se os índices do Firestore estão configurados corretamente.',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[500],
-                    ),
+                    style: TextStyle(fontSize: 14, color: Colors.grey[500]),
                     textAlign: TextAlign.center,
                   ),
                 ),
@@ -797,12 +804,13 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       // Usa lista local de caronas (já carregada) para evitar chamadas desnecessárias
       List<Ride> allRides = _rides.isNotEmpty ? _rides : [];
-      
+
       // Se não tiver caronas locais, tenta carregar com timeout
       if (allRides.isEmpty) {
         try {
-          allRides = await _ridesService.getActiveRides()
-              .timeout(const Duration(seconds: 5));
+          allRides = await _ridesService.getActiveRides().timeout(
+            const Duration(seconds: 5),
+          );
         } catch (e) {
           if (kDebugMode) {
             print('⚠ Não foi possível carregar caronas ativas: $e');
@@ -820,8 +828,16 @@ class _HomeScreenState extends State<HomeScreen> {
               id: '',
               driverId: '',
               driverName: '',
-              origin: Location(latitude: 0, longitude: 0, timestamp: DateTime.now()),
-              destination: Location(latitude: 0, longitude: 0, timestamp: DateTime.now()),
+              origin: Location(
+                latitude: 0,
+                longitude: 0,
+                timestamp: DateTime.now(),
+              ),
+              destination: Location(
+                latitude: 0,
+                longitude: 0,
+                timestamp: DateTime.now(),
+              ),
               dateTime: DateTime.now(),
               maxSeats: 1,
               availableSeats: 0,
@@ -830,13 +846,15 @@ class _HomeScreenState extends State<HomeScreen> {
           );
 
           if (ride.id.isNotEmpty) {
-            chatList.add(_ChatListItem(
-              ride: ride,
-              isDriver: false,
-              otherUserName: ride.driverName,
-              otherUserPhotoURL: ride.driverPhotoURL,
-              otherUserId: ride.driverId,
-            ));
+            chatList.add(
+              _ChatListItem(
+                ride: ride,
+                isDriver: false,
+                otherUserName: ride.driverName,
+                otherUserPhotoURL: ride.driverPhotoURL,
+                otherUserId: ride.driverId,
+              ),
+            );
           }
         } catch (e) {
           if (kDebugMode) {
@@ -851,27 +869,38 @@ class _HomeScreenState extends State<HomeScreen> {
         try {
           final requests = await _rideRequestService
               .getRequestsByRide(ride.id)
-              .timeout(const Duration(seconds: 5), onTimeout: () {
-            if (kDebugMode) {
-              print('⚠ Timeout ao buscar solicitações da carona ${ride.id}');
-            }
-            return <RideRequest>[];
-          });
-          
+              .timeout(
+                const Duration(seconds: 5),
+                onTimeout: () {
+                  if (kDebugMode) {
+                    print(
+                      '⚠ Timeout ao buscar solicitações da carona ${ride.id}',
+                    );
+                  }
+                  return <RideRequest>[];
+                },
+              );
+
           final accepted = requests.where((r) => r.isAccepted).toList();
-          
-          return accepted.map((request) => _ChatListItem(
-            ride: ride,
-            isDriver: true,
-            otherUserName: request.passengerName,
-            otherUserPhotoURL: request.passengerPhotoURL,
-            otherUserId: request.passengerId,
-          )).toList();
+
+          return accepted
+              .map(
+                (request) => _ChatListItem(
+                  ride: ride,
+                  isDriver: true,
+                  otherUserName: request.passengerName,
+                  otherUserPhotoURL: request.passengerPhotoURL,
+                  otherUserId: request.passengerId,
+                ),
+              )
+              .toList();
         } catch (e) {
           if (kDebugMode) {
             final errorMsg = e.toString();
             if (errorMsg.contains('index')) {
-              print('⚠ Índice do Firestore faltando para carona ${ride.id}. Crie o índice necessário.');
+              print(
+                '⚠ Índice do Firestore faltando para carona ${ride.id}. Crie o índice necessário.',
+              );
             } else {
               print('⚠ Erro ao carregar solicitações da carona ${ride.id}: $e');
             }
@@ -882,13 +911,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
       // Aguarda todas as chamadas em paralelo
       final results = await Future.wait(futures);
-      
+
       // Adiciona todas as conversas sem duplicatas
       for (final items in results) {
         for (final item in items) {
-          if (!chatList.any((existing) => 
-              existing.ride.id == item.ride.id && 
-              existing.otherUserId == item.otherUserId)) {
+          if (!chatList.any(
+            (existing) =>
+                existing.ride.id == item.ride.id &&
+                existing.otherUserId == item.otherUserId,
+          )) {
             chatList.add(item);
           }
         }
@@ -907,13 +938,15 @@ class _HomeScreenState extends State<HomeScreen> {
     // Carrega lista inicial de conversas com timeout aumentado
     List<_ChatListItem> initialList = [];
     try {
-      initialList = await _loadChatList(userId)
-          .timeout(const Duration(seconds: 10), onTimeout: () {
-        if (kDebugMode) {
-          print('⚠ Timeout ao carregar lista inicial de conversas (10s)');
-        }
-        return <_ChatListItem>[];
-      });
+      initialList = await _loadChatList(userId).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          if (kDebugMode) {
+            print('⚠ Timeout ao carregar lista inicial de conversas (10s)');
+          }
+          return <_ChatListItem>[];
+        },
+      );
     } catch (e) {
       if (kDebugMode) {
         print('✗ Erro ao carregar lista inicial de conversas: $e');
@@ -941,21 +974,23 @@ class _HomeScreenState extends State<HomeScreen> {
       final ridesStream = _ridesService.watchRidesByDriver(userId);
       await for (final rides in ridesStream) {
         if (!mounted) break;
-        
+
         try {
           setState(() {
             _myRides = rides;
           });
-          
+
           // Recarrega lista de conversas com timeout aumentado
-          final updatedList = await _loadChatList(userId)
-              .timeout(const Duration(seconds: 10), onTimeout: () {
-            if (kDebugMode) {
-              print('⚠ Timeout ao atualizar lista de conversas (10s)');
-            }
-            return <_ChatListItem>[];
-          });
-          
+          final updatedList = await _loadChatList(userId).timeout(
+            const Duration(seconds: 10),
+            onTimeout: () {
+              if (kDebugMode) {
+                print('⚠ Timeout ao atualizar lista de conversas (10s)');
+              }
+              return <_ChatListItem>[];
+            },
+          );
+
           chatListWithStreams = updatedList.map((chat) {
             return _ChatListItemWithStream(
               ride: chat.ride,
@@ -965,7 +1000,7 @@ class _HomeScreenState extends State<HomeScreen> {
               otherUserId: chat.otherUserId,
             );
           }).toList();
-          
+
           yield chatListWithStreams;
         } catch (e) {
           if (kDebugMode) {
@@ -990,22 +1025,28 @@ class _HomeScreenState extends State<HomeScreen> {
       stream: _chatService.watchLastMessage(chat.ride.id),
       builder: (context, lastMessageSnapshot) {
         final lastMessage = lastMessageSnapshot.data;
-        
+
         return StreamBuilder<int>(
           stream: _chatService.watchUnreadCount(chat.ride.id, userId),
           builder: (context, unreadSnapshot) {
             final unreadCount = unreadSnapshot.data ?? 0;
-            
+
             // Atualiza contador total de não lidas (será atualizado pela função _updateUnreadCount)
-            
-            final lastMessageText = lastMessage?.message ?? 'Nenhuma mensagem ainda';
-            final lastMessageTime = lastMessage?.timestamp ?? chat.ride.dateTime;
-            
+
+            final lastMessageText =
+                lastMessage?.message ?? 'Nenhuma mensagem ainda';
+            final lastMessageTime =
+                lastMessage?.timestamp ?? chat.ride.dateTime;
+
             String timeStr;
             final now = DateTime.now();
             final today = DateTime(now.year, now.month, now.day);
-            final messageDate = DateTime(lastMessageTime.year, lastMessageTime.month, lastMessageTime.day);
-            
+            final messageDate = DateTime(
+              lastMessageTime.year,
+              lastMessageTime.month,
+              lastMessageTime.day,
+            );
+
             if (messageDate == today) {
               timeStr = DateFormat('HH:mm').format(lastMessageTime);
             } else if (messageDate == today.subtract(const Duration(days: 1))) {
@@ -1013,7 +1054,7 @@ class _HomeScreenState extends State<HomeScreen> {
             } else {
               timeStr = DateFormat('dd/MM HH:mm').format(lastMessageTime);
             }
-            
+
             return Card(
               margin: const EdgeInsets.only(bottom: 12),
               shape: RoundedRectangleBorder(
@@ -1037,7 +1078,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         chat.otherUserName,
                         style: TextStyle(
                           fontSize: 16,
-                          fontWeight: unreadCount > 0 ? FontWeight.bold : FontWeight.w600,
+                          fontWeight: unreadCount > 0
+                              ? FontWeight.bold
+                              : FontWeight.w600,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -1045,7 +1088,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     if (unreadCount > 0)
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFF2196F3),
                           borderRadius: BorderRadius.circular(12),
@@ -1067,10 +1113,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: 4),
                     Text(
                       '${chat.ride.origin.address?.split(',').first ?? "Origem"} → ${chat.ride.destination.address?.split(',').first ?? "Destino"}',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey[600],
-                      ),
+                      style: TextStyle(fontSize: 13, color: Colors.grey[600]),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -1082,8 +1125,12 @@ class _HomeScreenState extends State<HomeScreen> {
                             lastMessageText,
                             style: TextStyle(
                               fontSize: 13,
-                              color: unreadCount > 0 ? Colors.black87 : Colors.grey[600],
-                              fontWeight: unreadCount > 0 ? FontWeight.w500 : FontWeight.normal,
+                              color: unreadCount > 0
+                                  ? Colors.black87
+                                  : Colors.grey[600],
+                              fontWeight: unreadCount > 0
+                                  ? FontWeight.w500
+                                  : FontWeight.normal,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -1105,7 +1152,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 onTap: () async {
                   // Marca mensagens como lidas ao abrir o chat
                   await _chatService.markAsRead(chat.ride.id, userId);
-                  
+
                   Navigator.pushNamed(
                     context,
                     '/chat',
@@ -1134,7 +1181,7 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Exibe detalhes de uma carona
   void _showRideDetailsDialog(Ride ride) {
     final timeStr = ride.dateTime.toString().substring(11, 16); // HH:mm
-    
+
     // Calcula distância antecipadamente (fora do StatefulBuilder para evitar múltiplas chamadas)
     Future<DistanceMatrixResult?>? distanceFuture;
     if (_userLocation != null) {
@@ -1161,7 +1208,9 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 8),
               Text('Horário: $timeStr'),
               const SizedBox(height: 8),
-              Text('Vagas: ${ride.availableSeats} disponíveis de ${ride.maxSeats}'),
+              Text(
+                'Vagas: ${ride.availableSeats} disponíveis de ${ride.maxSeats}',
+              ),
               if (_userLocation != null && distanceFuture != null) ...[
                 const SizedBox(height: 12),
                 const Divider(),
@@ -1181,17 +1230,25 @@ class _HomeScreenState extends State<HomeScreen> {
                           Text('Calculando distância...'),
                         ],
                       );
-                    } else if (snapshot.hasError || 
-                               snapshot.data == null || 
-                               (snapshot.data == null && snapshot.connectionState == ConnectionState.done)) {
+                    } else if (snapshot.hasError ||
+                        snapshot.data == null ||
+                        (snapshot.data == null &&
+                            snapshot.connectionState == ConnectionState.done)) {
                       return Row(
                         children: [
-                          const Icon(Icons.info_outline, size: 16, color: Colors.orange),
+                          const Icon(
+                            Icons.info_outline,
+                            size: 16,
+                            color: Colors.orange,
+                          ),
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
                               'Habilite Distance Matrix API no Google Cloud Console',
-                              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                              ),
                             ),
                           ),
                         ],
@@ -1203,22 +1260,34 @@ class _HomeScreenState extends State<HomeScreen> {
                         children: [
                           Row(
                             children: [
-                              const Icon(Icons.straighten, size: 16, color: Colors.grey),
+                              const Icon(
+                                Icons.straighten,
+                                size: 16,
+                                color: Colors.grey,
+                              ),
                               const SizedBox(width: 4),
                               Text(
                                 'Distância: ${result.distanceKm.toStringAsFixed(1)} km',
-                                style: const TextStyle(fontWeight: FontWeight.w600),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ],
                           ),
                           const SizedBox(height: 4),
                           Row(
                             children: [
-                              const Icon(Icons.access_time, size: 16, color: Colors.grey),
+                              const Icon(
+                                Icons.access_time,
+                                size: 16,
+                                color: Colors.grey,
+                              ),
                               const SizedBox(width: 4),
                               Text(
                                 'Tempo: ${_formatDuration(result.duration)}',
-                                style: const TextStyle(fontWeight: FontWeight.w600),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ],
                           ),
@@ -1271,7 +1340,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Solicita uma carona
   Future<void> _requestRide(Ride ride) async {
-    final authProvider = Provider.of<app_auth.AuthProvider>(context, listen: false);
+    final authProvider = Provider.of<app_auth.AuthProvider>(
+      context,
+      listen: false,
+    );
     final user = authProvider.user;
 
     if (user == null) {
@@ -1319,9 +1391,7 @@ class _HomeScreenState extends State<HomeScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const Center(
-        child: CircularProgressIndicator(),
-      ),
+      builder: (context) => const Center(child: CircularProgressIndicator()),
     );
 
     try {
@@ -1345,7 +1415,9 @@ class _HomeScreenState extends State<HomeScreen> {
         if (requestId != null) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Solicitação enviada com sucesso! Aguarde a aprovação do motorista.'),
+              content: Text(
+                'Solicitação enviada com sucesso! Aguarde a aprovação do motorista.',
+              ),
               backgroundColor: Colors.green,
               duration: Duration(seconds: 3),
             ),
@@ -1377,22 +1449,32 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Atualiza contador total de mensagens não lidas
   Future<void> _updateUnreadCount() async {
-    final authProvider = Provider.of<app_auth.AuthProvider>(context, listen: false);
+    final authProvider = Provider.of<app_auth.AuthProvider>(
+      context,
+      listen: false,
+    );
     final user = authProvider.user;
-    
+
     if (user == null || !mounted) return;
-    
+
     try {
       // Carrega lista de conversas
       final chatList = await _loadChatList(user.uid);
       int total = 0;
-      
+
       // Para cada conversa, conta mensagens não lidas
       for (final chat in chatList) {
         try {
-          final lastRead = await _chatService.getLastReadTimestamp(chat.ride.id, user.uid);
-          final unreadStream = _chatService.watchUnreadCount(chat.ride.id, user.uid, lastReadTimestamp: lastRead);
-          
+          final lastRead = await _chatService.getLastReadTimestamp(
+            chat.ride.id,
+            user.uid,
+          );
+          final unreadStream = _chatService.watchUnreadCount(
+            chat.ride.id,
+            user.uid,
+            lastReadTimestamp: lastRead,
+          );
+
           // Pega o primeiro valor do stream com timeout de 2 segundos
           int unreadCount = 0;
           try {
@@ -1406,7 +1488,7 @@ class _HomeScreenState extends State<HomeScreen> {
             }
             unreadCount = 0;
           }
-          
+
           total += unreadCount;
         } catch (e) {
           if (kDebugMode) {
@@ -1415,7 +1497,7 @@ class _HomeScreenState extends State<HomeScreen> {
           // Continua para próxima conversa (assume 0 não lidas)
         }
       }
-      
+
       if (mounted) {
         setState(() {
           _totalUnreadMessages = total;
@@ -1462,5 +1544,3 @@ class _ChatListItemWithStream {
     required this.otherUserId,
   });
 }
-
-

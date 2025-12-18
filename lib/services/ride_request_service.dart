@@ -1,3 +1,6 @@
+// Serviço de solicitações de carona - gerencia pedidos entre passageiro e motorista
+// Controla aceitação, rejeição e cancelamento de solicitações
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import '../models/ride_request.dart';

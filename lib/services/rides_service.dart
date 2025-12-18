@@ -1,10 +1,14 @@
+// Serviço responsável por gerenciar caronas no Firestore
+// Implementa operações CRUD e consultas geoespaciais usando geohash
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import '../models/ride.dart';
 import '../utils/geohash_utils.dart';
 import 'location_service.dart';
 
-/// Serviço para gerenciar caronas no Firestore
+// Classe singleton para gerenciamento completo de caronas
+// Inclui filtros por localização, motorista, data e disponibilidade
 class RidesService {
   static final RidesService _instance = RidesService._internal();
   factory RidesService() => _instance;
@@ -35,14 +39,11 @@ class RidesService {
 
   /// Stream de caronas ativas e disponíveis
   Stream<List<Ride>> watchActiveRides() {
-    return _activeRidesQuery()
-        .limit(_defaultLimit)
-        .snapshots()
-        .map((snapshot) {
+    return _activeRidesQuery().limit(_defaultLimit).snapshots().map((snapshot) {
       if (kDebugMode) {
         print('✓ ${snapshot.docs.length} caronas ativas encontradas (stream)');
       }
-      
+
       final rides = snapshot.docs
           .map((doc) {
             try {
@@ -56,7 +57,7 @@ class RidesService {
           })
           .whereType<Ride>()
           .toList();
-      
+
       // Ordena por vagas disponíveis
       rides.sort((a, b) {
         if (a.availableSeats != b.availableSeats) {
@@ -64,7 +65,7 @@ class RidesService {
         }
         return a.dateTime.compareTo(b.dateTime);
       });
-      
+
       return rides;
     });
   }
@@ -72,9 +73,7 @@ class RidesService {
   /// Busca todas as caronas ativas
   Future<List<Ride>> getActiveRides({int limit = _defaultLimit}) async {
     try {
-      final snapshot = await _activeRidesQuery()
-          .limit(limit)
-          .get();
+      final snapshot = await _activeRidesQuery().limit(limit).get();
 
       final rides = _mapSnapshotToRides(snapshot.docs);
 
@@ -101,17 +100,15 @@ class RidesService {
         .orderBy('dateTime', descending: true)
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs
-          .map((doc) => Ride.fromFirestore(doc))
-          .toList();
-    });
+          return snapshot.docs.map((doc) => Ride.fromFirestore(doc)).toList();
+        });
   }
 
   /// Busca uma carona específica por ID
   Future<Ride?> getRideById(String rideId) async {
     try {
       final doc = await _ridesCollection.doc(rideId).get();
-      
+
       if (!doc.exists) {
         return null;
       }
@@ -137,7 +134,9 @@ class RidesService {
     const int batchSize = 10; // Limite do Firestore para whereIn
 
     for (var i = 0; i < uniqueIds.length; i += batchSize) {
-      final endIndex = i + batchSize < uniqueIds.length ? i + batchSize : uniqueIds.length;
+      final endIndex = i + batchSize < uniqueIds.length
+          ? i + batchSize
+          : uniqueIds.length;
       final chunk = uniqueIds.sublist(i, endIndex);
 
       try {
@@ -192,7 +191,9 @@ class RidesService {
     required DateTime dateTime,
     String? ignoreRideId,
   }) async {
-    final startWindow = Timestamp.fromDate(dateTime.subtract(_driverConflictWindow));
+    final startWindow = Timestamp.fromDate(
+      dateTime.subtract(_driverConflictWindow),
+    );
     final endWindow = Timestamp.fromDate(dateTime.add(_driverConflictWindow));
 
     final snapshot = await _ridesCollection
@@ -239,7 +240,11 @@ class RidesService {
     double radiusKm = 10.0,
   }) async {
     try {
-      final hashes = GeohashUtils.hashesForRadius(latitude, longitude, radiusKm);
+      final hashes = GeohashUtils.hashesForRadius(
+        latitude,
+        longitude,
+        radiusKm,
+      );
       final results = <String, _RideDistance>{};
 
       for (final hash in hashes) {
@@ -262,7 +267,10 @@ class RidesService {
             if (distance <= radiusKm) {
               final existing = results[ride.id];
               if (existing == null || distance < existing.distance) {
-                results[ride.id] = _RideDistance(ride: ride, distance: distance);
+                results[ride.id] = _RideDistance(
+                  ride: ride,
+                  distance: distance,
+                );
               }
             }
           } catch (e) {
@@ -285,7 +293,9 @@ class RidesService {
         });
 
       if (kDebugMode) {
-        print('✓ ${sorted.length} caronas próximas encontradas dentro de ${radiusKm}km');
+        print(
+          '✓ ${sorted.length} caronas próximas encontradas dentro de ${radiusKm}km',
+        );
       }
 
       return sorted.map((entry) => entry.ride).toList();
@@ -297,7 +307,9 @@ class RidesService {
         );
       }
       if (kDebugMode) {
-        print('✗ Erro do Firestore em getNearbyRides: ${e.code} - ${e.message}');
+        print(
+          '✗ Erro do Firestore em getNearbyRides: ${e.code} - ${e.message}',
+        );
       }
       return [];
     } catch (e) {
@@ -327,7 +339,8 @@ class RidesService {
       if (ride.updatedAt != null) {
         rideMap['updatedAt'] = Timestamp.fromDate(ride.updatedAt!);
       }
-      rideMap['isAvailable'] = ride.status == 'active' && ride.availableSeats > 0;
+      rideMap['isAvailable'] =
+          ride.status == 'active' && ride.availableSeats > 0;
       if (rideMap['startedAt'] == null) {
         rideMap.remove('startedAt');
       }
@@ -340,19 +353,23 @@ class RidesService {
       );
       rideMap['originGeoPoint'] = originGeoPoint;
       rideMap['originGeoHash'] = originGeoHash;
-      
+
       if (kDebugMode) {
         print('📝 Criando carona:');
         print('  Driver: ${ride.driverName}');
-        print('  Origem: ${ride.origin.address ?? '${ride.origin.latitude}, ${ride.origin.longitude}'}');
-        print('  Destino: ${ride.destination.address ?? '${ride.destination.latitude}, ${ride.destination.longitude}'}');
+        print(
+          '  Origem: ${ride.origin.address ?? '${ride.origin.latitude}, ${ride.origin.longitude}'}',
+        );
+        print(
+          '  Destino: ${ride.destination.address ?? '${ride.destination.latitude}, ${ride.destination.longitude}'}',
+        );
         print('  Vagas: ${ride.availableSeats}/${ride.maxSeats}');
         print('  Status: ${ride.status}');
         print('  Data/Hora: ${ride.dateTime}');
       }
-      
+
       final docRef = await _ridesCollection.add(rideMap);
-      
+
       if (kDebugMode) {
         print('✓ Carona criada com sucesso: ${docRef.id}');
       }
@@ -393,7 +410,8 @@ class RidesService {
       rideMap['dateTime'] = Timestamp.fromDate(ride.dateTime);
       rideMap.remove('createdAt');
       rideMap['updatedAt'] = FieldValue.serverTimestamp();
-      rideMap['isAvailable'] = ride.status == 'active' && ride.availableSeats > 0;
+      rideMap['isAvailable'] =
+          ride.status == 'active' && ride.availableSeats > 0;
       if (rideMap['startedAt'] == null) {
         rideMap.remove('startedAt');
       }
@@ -437,88 +455,92 @@ class RidesService {
 
   /// Reserva uma vaga em uma carona
   Future<bool> reserveSeat(String rideId) async {
-    return _firestore.runTransaction((transaction) async {
-      final rideRef = _ridesCollection.doc(rideId);
-      final snapshot = await transaction.get(rideRef);
+    return _firestore
+        .runTransaction((transaction) async {
+          final rideRef = _ridesCollection.doc(rideId);
+          final snapshot = await transaction.get(rideRef);
 
-      if (!snapshot.exists) {
-        if (kDebugMode) {
-          print('✗ Carona não encontrada para reserva: $rideId');
-        }
-        return false;
-      }
+          if (!snapshot.exists) {
+            if (kDebugMode) {
+              print('✗ Carona não encontrada para reserva: $rideId');
+            }
+            return false;
+          }
 
-      final ride = Ride.fromFirestore(snapshot);
+          final ride = Ride.fromFirestore(snapshot);
 
-      if (!ride.isAvailable || ride.availableSeats <= 0) {
-        if (kDebugMode) {
-          print('✗ Não há vagas disponíveis na carona $rideId');
-        }
-        return false;
-      }
+          if (!ride.isAvailable || ride.availableSeats <= 0) {
+            if (kDebugMode) {
+              print('✗ Não há vagas disponíveis na carona $rideId');
+            }
+            return false;
+          }
 
-      final newSeats = ride.availableSeats - 1;
+          final newSeats = ride.availableSeats - 1;
 
-      transaction.update(rideRef, {
-        'availableSeats': FieldValue.increment(-1),
-        'isAvailable': ride.status == 'active' && newSeats > 0,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+          transaction.update(rideRef, {
+            'availableSeats': FieldValue.increment(-1),
+            'isAvailable': ride.status == 'active' && newSeats > 0,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
 
-      if (kDebugMode) {
-        print('✓ Vaga reservada na carona: $rideId');
-      }
+          if (kDebugMode) {
+            print('✓ Vaga reservada na carona: $rideId');
+          }
 
-      return true;
-    }).catchError((error) {
-      if (kDebugMode) {
-        print('✗ Erro ao reservar vaga: $error');
-      }
-      return false;
-    });
+          return true;
+        })
+        .catchError((error) {
+          if (kDebugMode) {
+            print('✗ Erro ao reservar vaga: $error');
+          }
+          return false;
+        });
   }
 
   /// Libera uma vaga em uma carona
   Future<bool> releaseSeat(String rideId) async {
-    return _firestore.runTransaction((transaction) async {
-      final rideRef = _ridesCollection.doc(rideId);
-      final snapshot = await transaction.get(rideRef);
+    return _firestore
+        .runTransaction((transaction) async {
+          final rideRef = _ridesCollection.doc(rideId);
+          final snapshot = await transaction.get(rideRef);
 
-      if (!snapshot.exists) {
-        if (kDebugMode) {
-          print('✗ Carona não encontrada para liberação: $rideId');
-        }
-        return false;
-      }
+          if (!snapshot.exists) {
+            if (kDebugMode) {
+              print('✗ Carona não encontrada para liberação: $rideId');
+            }
+            return false;
+          }
 
-      final ride = Ride.fromFirestore(snapshot);
+          final ride = Ride.fromFirestore(snapshot);
 
-      if (ride.availableSeats >= ride.maxSeats) {
-        if (kDebugMode) {
-          print('✗ Limite máximo de vagas atingido para $rideId');
-        }
-        return false;
-      }
+          if (ride.availableSeats >= ride.maxSeats) {
+            if (kDebugMode) {
+              print('✗ Limite máximo de vagas atingido para $rideId');
+            }
+            return false;
+          }
 
-      final newSeats = ride.availableSeats + 1;
+          final newSeats = ride.availableSeats + 1;
 
-      transaction.update(rideRef, {
-        'availableSeats': FieldValue.increment(1),
-        'isAvailable': ride.status == 'active' && newSeats > 0,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+          transaction.update(rideRef, {
+            'availableSeats': FieldValue.increment(1),
+            'isAvailable': ride.status == 'active' && newSeats > 0,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
 
-      if (kDebugMode) {
-        print('✓ Vaga liberada na carona: $rideId');
-      }
+          if (kDebugMode) {
+            print('✓ Vaga liberada na carona: $rideId');
+          }
 
-      return true;
-    }).catchError((error) {
-      if (kDebugMode) {
-        print('✗ Erro ao liberar vaga: $error');
-      }
-      return false;
-    });
+          return true;
+        })
+        .catchError((error) {
+          if (kDebugMode) {
+            print('✗ Erro ao liberar vaga: $error');
+          }
+          return false;
+        });
   }
 
   /// Finaliza uma carona
@@ -611,9 +633,5 @@ class _RideDistance {
   final Ride ride;
   final double distance;
 
-  const _RideDistance({
-    required this.ride,
-    required this.distance,
-  });
+  const _RideDistance({required this.ride, required this.distance});
 }
-

@@ -191,10 +191,10 @@ Este projeto está licenciado sob os termos do arquivo `LICENSE`.
 ## 🎓 Instituição
 
 <p align="center"><strong>Universidade do Distrito Federal (UDF)</strong></p>
-****
+
 ---
 
 <p align="center">
   <strong>Mobilidade acadêmica consciente</strong><br/>
   Feito com ❤️ usando Flutter
-</p>********
+</p>

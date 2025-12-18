@@ -293,6 +293,30 @@ class _LocationRequestScreenState extends State<LocationRequestScreen>
     }
   }
 
+  /// Mostra um diálogo explicando porque o app precisa da permissão
+  Future<bool> _showPermissionRationale() async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Permissão de Localização'),
+            content: const Text(
+              'Para encontrar caronas próximas e oferecer rotas precisas, precisamos acessar sua localização. Deseja permitir agora?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Permitir'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
   /// Pula a solicitação de localização
   void _skipLocationRequest() {
     _navigateToLogin();

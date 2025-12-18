@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../models/onboarding_page_model.dart';
 import '../widgets/onboarding_page_content.dart';
-import '../widgets/page_indicator.dart';
 
 /// Tela principal do fluxo de Onboarding
 ///
@@ -78,6 +77,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               itemBuilder: (context, index) {
                 return OnboardingPageContent(
                   page: OnboardingData.getPage(index),
+                  currentPage: _currentPage,
+                  pageCount: OnboardingData.pageCount,
                 );
               },
             ),
@@ -281,6 +282,8 @@ class _AnimatedOnboardingScreenState extends State<AnimatedOnboardingScreen>
                   opacity: _animationController,
                   child: OnboardingPageContent(
                     page: OnboardingData.getPage(index),
+                    currentPage: _currentPage,
+                    pageCount: OnboardingData.pageCount,
                   ),
                 );
               },

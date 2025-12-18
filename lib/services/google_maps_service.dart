@@ -1,3 +1,6 @@
+// Serviço de integração com Google Maps APIs
+// Implementa geocoding, reverse geocoding, rotas e cálculo de distâncias
+
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;

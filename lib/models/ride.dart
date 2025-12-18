@@ -1,7 +1,11 @@
+// Modelo de dados que representa uma carona no sistema
+// Inclui informações do motorista, origem, destino, vagas e status
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'location.dart';
 
-/// Modelo para representar uma carona
+// Classe principal do modelo Ride - armazena todos os dados de uma carona
+// Suporta conversão de/para Firestore e validação de disponibilidade
 class Ride {
   final String id;
   final String driverId;
@@ -9,7 +13,8 @@ class Ride {
   final String? driverPhotoURL;
   final Location origin;
   final Location destination;
-  final List<Location> pickupPoints; // Pontos de embarque definidos pelo motorista
+  final List<Location>
+  pickupPoints; // Pontos de embarque definidos pelo motorista
   final DateTime dateTime;
   final int maxSeats;
   final int availableSeats;
@@ -47,7 +52,7 @@ class Ride {
   factory Ride.fromFirestore(dynamic doc) {
     try {
       final data = doc.data() as Map<String, dynamic>;
-      
+
       // Helper para converter Timestamp para DateTime
       DateTime parseDateTime(dynamic value) {
         if (value == null) return DateTime.now();
@@ -59,7 +64,7 @@ class Ride {
         // Fallback: tenta parsear como string ou retorna agora
         return DateTime.now();
       }
-      
+
       // Parse pickup points
       List<Location> pickupPoints = [];
       if (data['pickupPoints'] != null && data['pickupPoints'] is List) {
@@ -67,7 +72,7 @@ class Ride {
             .map((item) => Location.fromMap(item as Map<String, dynamic>))
             .toList();
       }
-      
+
       final ride = Ride(
         id: doc.id,
         driverId: data['driverId'] ?? '',
@@ -83,16 +88,18 @@ class Ride {
         price: data['price']?.toDouble(),
         status: data['status'] ?? 'active',
         createdAt: parseDateTime(data['createdAt']),
-        updatedAt: data['updatedAt'] != null 
-            ? parseDateTime(data['updatedAt']) 
+        updatedAt: data['updatedAt'] != null
+            ? parseDateTime(data['updatedAt'])
             : null,
         startedAt: data['startedAt'] != null
             ? parseDateTime(data['startedAt'])
             : null,
-        originGeoPoint: data['originGeoPoint'] is GeoPoint ? data['originGeoPoint'] as GeoPoint : null,
+        originGeoPoint: data['originGeoPoint'] is GeoPoint
+            ? data['originGeoPoint'] as GeoPoint
+            : null,
         originGeoHash: data['originGeoHash'] as String?,
       );
-      
+
       return ride;
     } catch (e) {
       // Em caso de erro, retorna uma carona inválida que será filtrada
@@ -192,4 +199,3 @@ class Ride {
   @override
   int get hashCode => id.hashCode;
 }
-

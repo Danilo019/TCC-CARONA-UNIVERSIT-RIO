@@ -1,3 +1,6 @@
+// Provider de autenticação - gerencia estado global do usuário logado
+// Integra ChangeNotifier para notificar widgets sobre mudanças de autenticação
+
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
