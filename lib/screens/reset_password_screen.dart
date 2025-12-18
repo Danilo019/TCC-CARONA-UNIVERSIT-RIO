@@ -23,6 +23,7 @@ class ResetPasswordScreen extends StatefulWidget {
 
 class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _tokenController = TextEditingController();
   final _newPasswordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final AuthService _authService = AuthService();
@@ -39,11 +40,16 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   void initState() {
     super.initState();
     _newPasswordController.addListener(_onPasswordChanged);
+    // Se o token foi passado, preenche o campo
+    if (widget.token.isNotEmpty) {
+      _tokenController.text = widget.token;
+    }
   }
 
   @override
   void dispose() {
     _newPasswordController.removeListener(_onPasswordChanged);
+    _tokenController.dispose();
     _newPasswordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
@@ -164,6 +170,73 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
                 // Campos de senha (só mostra se ainda não resetou)
                 if (!_passwordReset) ...[
+                  // Campo Código de Verificação
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.blue[50],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.blue[200]!),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.mail, color: Colors.blue[700]),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Digite o código de 6 dígitos enviado para seu e-mail',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.blue[900],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 16),
+
+                  // Campo Token
+                  TextFormField(
+                    controller: _tokenController,
+                    keyboardType: TextInputType.number,
+                    maxLength: 6,
+                    textAlign: TextAlign.center,
+                    enabled: !_isLoading,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 8,
+                    ),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(6),
+                    ],
+                    decoration: InputDecoration(
+                      labelText: 'Código de Verificação',
+                      hintText: '000000',
+                      prefixIcon: const Icon(Icons.verified_user),
+                      counterText: '',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      filled: true,
+                      fillColor: Colors.white,
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Digite o código recebido por e-mail';
+                      }
+                      if (value.length != 6) {
+                        return 'O código deve ter 6 dígitos';
+                      }
+                      return null;
+                    },
+                  ),
+
+                  const SizedBox(height: 24),
+
                   // Campo Nova Senha
                   TextFormField(
                     controller: _newPasswordController,
@@ -512,15 +585,17 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     });
 
     try {
+      final token = _tokenController.text.trim();
+
       // 1. Valida o token antes de redefinir
       final isValid = await _tokenService.validateToken(
-        widget.token,
+        token,
         widget.email,
       );
 
       if (!isValid) {
         throw Exception(
-          'Token inválido ou expirado. Por favor, solicite um novo código.',
+          'Código inválido ou expirado. Por favor, solicite um novo código.',
         );
       }
 
@@ -528,7 +603,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       try {
         await _authService.resetPasswordWithToken(
           widget.email,
-          widget.token,
+          token,
           newPassword,
         );
 

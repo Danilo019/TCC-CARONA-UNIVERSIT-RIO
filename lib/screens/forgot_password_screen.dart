@@ -392,18 +392,29 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       final success = await _authService.sendPasswordResetEmail(email);
 
       if (success && mounted) {
-        setState(() {
-          _emailSent = true;
-          _isLoading = false;
-        });
-
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Email enviado para $email'),
             backgroundColor: Colors.green,
-            duration: const Duration(seconds: 3),
+            duration: const Duration(seconds: 2),
           ),
         );
+
+        // Aguarda um momento para o usuário ver a mensagem
+        await Future.delayed(const Duration(milliseconds: 500));
+
+        // Navega diretamente para a tela de reset de senha
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ResetPasswordScreen(
+                email: email,
+                token: '', // Token será digitado na próxima tela
+              ),
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {

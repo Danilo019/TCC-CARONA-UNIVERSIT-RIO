@@ -27,9 +27,16 @@ class TokenService {
         throw Exception('Apenas emails @cs.udf.edu.br são permitidos');
       }
 
-      final callable = _functions.httpsCallable('issueActivationToken');
-      final result = await callable
-          .call({'email': email, 'purpose': purpose})
+      // Usa o backend no Railway ao invés da Cloud Function
+      final response = await _emailService.httpClient
+          .post(
+            Uri.parse('${_emailService.backendUrl}/api/issue-token'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'email': email,
+              'purpose': purpose,
+            }),
+          )
           .timeout(
             const Duration(seconds: 30),
             onTimeout: () {
@@ -39,18 +46,25 @@ class TokenService {
             },
           );
 
-      final rawData = result.data;
-      if (rawData is! Map) {
-        throw Exception('Resposta inválida da Cloud Function ao gerar token.');
+      if (response.statusCode != 200) {
+        final errorData = jsonDecode(response.body);
+        throw Exception(
+          errorData['message'] ?? 'Erro ao gerar token: ${response.statusCode}',
+        );
       }
 
-      final data = Map<String, dynamic>.from(rawData);
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      
+      if (data['success'] != true) {
+        throw Exception(data['message'] ?? 'Erro ao gerar token');
+      }
+
       final createdAtMillis = (data['createdAt'] as num?)?.toInt();
       final expiresAtMillis = (data['expiresAt'] as num?)?.toInt();
 
       if (createdAtMillis == null || expiresAtMillis == null) {
         throw Exception(
-          'Resposta incompleta da Cloud Function ao gerar token.',
+          'Resposta incompleta do backend ao gerar token.',
         );
       }
 
@@ -62,23 +76,11 @@ class TokenService {
         isUsed: data['isUsed'] as bool? ?? false,
         userId: data['userId'] as String?,
       );
-    } on FirebaseFunctionsException catch (e) {
+    } catch (e) {
       if (kDebugMode) {
-        print(
-          '✗ Erro na Cloud Function issueActivationToken: ${e.code} - ${e.message}',
-        );
+        print('✗ Erro ao gerar token via Railway: $e');
       }
-
-      if (e.code == 'unimplemented' ||
-          e.code == 'internal' ||
-          e.code == 'unavailable') {
-        throw Exception(
-          e.message ??
-              'Cloud Function não disponível. Verifique o deploy do backend.',
-        );
-      }
-
-      throw Exception(e.message ?? 'Erro ao gerar token. Tente novamente.');
+      rethrow;
     }
   }
 
@@ -88,7 +90,7 @@ class TokenService {
       final token = await _issueToken(email: email, purpose: 'activation');
 
       if (kDebugMode) {
-        print('✓ Token criado via Cloud Function: ${token.token} para $email');
+        print('✓ Token criado via Railway: ${token.token} para $email');
       }
 
       return token;
@@ -108,9 +110,21 @@ class TokenService {
     bool markAsUsed = false,
   }) async {
     try {
-      final callable = _functions.httpsCallable('validateActivationToken');
-      final result = await callable
-          .call({'token': token, 'email': email, 'markAsUsed': markAsUsed})
+      if (kDebugMode) {
+        print('🔍 Validando token $token para $email via Railway');
+      }
+
+      // Usa o backend no Railway ao invés da Cloud Function
+      final response = await _emailService.httpClient
+          .post(
+            Uri.parse('${_emailService.backendUrl}/api/validate-token'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'email': email,
+              'token': token,
+              'markAsUsed': markAsUsed,
+            }),
+          )
           .timeout(
             const Duration(seconds: 30),
             onTimeout: () {
@@ -120,51 +134,33 @@ class TokenService {
             },
           );
 
-      final rawData = result.data;
-      if (rawData is! Map) {
-        throw Exception(
-          'Resposta inválida da Cloud Function ao validar token.',
-        );
-      }
-
-      final data = Map<String, dynamic>.from(rawData);
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
       final isValid = data['isValid'] == true;
 
-      if (kDebugMode && isValid) {
-        print('✓ Token validado com sucesso via Cloud Function: $token');
+      if (kDebugMode) {
+        if (isValid) {
+          print('✓ Token validado com sucesso via Railway: $token');
+        } else {
+          print('✗ Token inválido: ${data['message'] ?? 'erro desconhecido'}');
+        }
       }
 
       return isValid;
-    } on FirebaseFunctionsException catch (e) {
+    } catch (e) {
       if (kDebugMode) {
-        print(
-          '✗ Erro na Cloud Function validateActivationToken: ${e.code} - ${e.message}',
-        );
+        print('✗ Erro ao validar token via Railway: $e');
       }
 
       // Erros esperados de validação retornam false
-      if (e.code == 'not-found' ||
-          e.code == 'permission-denied' ||
-          e.code == 'deadline-exceeded' ||
-          e.code == 'invalid-argument') {
+      final errorStr = e.toString().toLowerCase();
+      if (errorStr.contains('token_not_found') ||
+          errorStr.contains('token_expired') ||
+          errorStr.contains('token_used') ||
+          errorStr.contains('invalid')) {
         return false;
       }
 
-      // Função não configurada ou indisponível - repassa erro para UI orientar setup
-      if (e.code == 'unimplemented' ||
-          e.code == 'internal' ||
-          e.code == 'unavailable') {
-        throw Exception(
-          e.message ??
-              'Cloud Function não disponível. Verifique o deploy do backend.',
-        );
-      }
-
-      throw Exception(e.message ?? 'Erro ao validar token. Tente novamente.');
-    } catch (e) {
-      if (kDebugMode) {
-        print('✗ Erro genérico ao validar token: $e');
-      }
+      // Erro de conexão ou servidor - repassa erro para UI
       rethrow;
     }
   }
@@ -184,6 +180,10 @@ class TokenService {
   /// Usa EmailService para envio real
   Future<bool> sendActivationEmail(String email, String token) async {
     try {
+      if (kDebugMode) {
+        print('📧 Tentando enviar email de ativação para $email com token $token');
+      }
+
       // Extrai o nome do usuário do email (parte antes do @)
       final userName = email.split('@').first;
 

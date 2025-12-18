@@ -802,16 +802,21 @@ class _HomeScreenState extends State<HomeScreen> {
     List<_ChatListItem> chatList = [];
 
     try {
-      // Carrega todas as caronas ativas primeiro - com fallback
-      List<Ride> allRides = [];
-      try {
-        allRides = await _ridesService.getActiveRides();
-      } catch (e) {
-        if (kDebugMode) {
-          print('⚠ Erro ao carregar caronas ativas, usando lista local: $e');
+      // Usa lista local de caronas (já carregada) para evitar chamadas desnecessárias
+      List<Ride> allRides = _rides.isNotEmpty ? _rides : [];
+
+      // Se não tiver caronas locais, tenta carregar com timeout
+      if (allRides.isEmpty) {
+        try {
+          allRides = await _ridesService.getActiveRides().timeout(
+            const Duration(seconds: 5),
+          );
+        } catch (e) {
+          if (kDebugMode) {
+            print('⚠ Não foi possível carregar caronas ativas: $e');
+          }
+          return chatList; // Retorna lista vazia se não conseguir carregar
         }
-        // Usa lista local como fallback
-        allRides = _rides;
       }
 
       // Adiciona conversas como passageiro (solicitações aceitas)
@@ -859,13 +864,13 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       // Adiciona conversas como motorista (caronas com passageiros aceitos)
-      for (final ride in _myRides) {
+      // Carrega todas as solicitações em paralelo para melhorar performance
+      final futures = _myRides.map((ride) async {
         try {
-          // Usa timeout para evitar travamento quando há erro de índice
           final requests = await _rideRequestService
               .getRequestsByRide(ride.id)
               .timeout(
-                const Duration(seconds: 3),
+                const Duration(seconds: 5),
                 onTimeout: () {
                   if (kDebugMode) {
                     print(
@@ -878,23 +883,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
           final accepted = requests.where((r) => r.isAccepted).toList();
 
-          for (final request in accepted) {
-            if (!chatList.any(
-              (item) =>
-                  item.ride.id == ride.id &&
-                  item.otherUserId == request.passengerId,
-            )) {
-              chatList.add(
-                _ChatListItem(
+          return accepted
+              .map(
+                (request) => _ChatListItem(
                   ride: ride,
                   isDriver: true,
                   otherUserName: request.passengerName,
                   otherUserPhotoURL: request.passengerPhotoURL,
                   otherUserId: request.passengerId,
                 ),
-              );
-            }
-          }
+              )
+              .toList();
         } catch (e) {
           if (kDebugMode) {
             final errorMsg = e.toString();
@@ -906,7 +905,23 @@ class _HomeScreenState extends State<HomeScreen> {
               print('⚠ Erro ao carregar solicitações da carona ${ride.id}: $e');
             }
           }
-          // Continua sem quebrar, apenas não mostra esta conversa
+          return <_ChatListItem>[];
+        }
+      }).toList();
+
+      // Aguarda todas as chamadas em paralelo
+      final results = await Future.wait(futures);
+
+      // Adiciona todas as conversas sem duplicatas
+      for (final items in results) {
+        for (final item in items) {
+          if (!chatList.any(
+            (existing) =>
+                existing.ride.id == item.ride.id &&
+                existing.otherUserId == item.otherUserId,
+          )) {
+            chatList.add(item);
+          }
         }
       }
     } catch (e) {
@@ -920,14 +935,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Stream de lista de conversas atualizada em tempo real
   Stream<List<_ChatListItemWithStream>> _watchChatList(String userId) async* {
-    // Carrega lista inicial de conversas com timeout
+    // Carrega lista inicial de conversas com timeout aumentado
     List<_ChatListItem> initialList = [];
     try {
       initialList = await _loadChatList(userId).timeout(
-        const Duration(seconds: 5),
+        const Duration(seconds: 10),
         onTimeout: () {
           if (kDebugMode) {
-            print('⚠ Timeout ao carregar lista inicial de conversas');
+            print('⚠ Timeout ao carregar lista inicial de conversas (10s)');
           }
           return <_ChatListItem>[];
         },
@@ -936,7 +951,6 @@ class _HomeScreenState extends State<HomeScreen> {
       if (kDebugMode) {
         print('✗ Erro ao carregar lista inicial de conversas: $e');
       }
-      // Emite lista vazia em caso de erro
       initialList = [];
     }
 
@@ -958,9 +972,7 @@ class _HomeScreenState extends State<HomeScreen> {
     // Quando há mudanças, recarrega a lista
     try {
       final ridesStream = _ridesService.watchRidesByDriver(userId);
-      await for (final rides in ridesStream.timeout(
-        const Duration(seconds: 30),
-      )) {
+      await for (final rides in ridesStream) {
         if (!mounted) break;
 
         try {
@@ -968,12 +980,12 @@ class _HomeScreenState extends State<HomeScreen> {
             _myRides = rides;
           });
 
-          // Recarrega lista de conversas com timeout
+          // Recarrega lista de conversas com timeout aumentado
           final updatedList = await _loadChatList(userId).timeout(
-            const Duration(seconds: 5),
+            const Duration(seconds: 10),
             onTimeout: () {
               if (kDebugMode) {
-                print('⚠ Timeout ao atualizar lista de conversas');
+                print('⚠ Timeout ao atualizar lista de conversas (10s)');
               }
               return <_ChatListItem>[];
             },

@@ -660,6 +660,11 @@ class _RideManagerScreenState extends State<RideManagerScreen> {
       final acceptedRequests = requests.where((r) => r.isAccepted).toList();
 
       for (final request in acceptedRequests) {
+        // Ignora se for o próprio usuário (não pode avaliar a si mesmo)
+        if (request.passengerId == currentUserId) {
+          continue;
+        }
+
         final avaliacaoKey = '${ride.id}_${currentUserId}_${request.passengerId}';
         
         if (!_avaliacaoVerificada.containsKey(avaliacaoKey)) {

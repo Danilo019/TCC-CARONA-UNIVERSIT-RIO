@@ -1,5 +1,5 @@
 /// Modelo de dados para cada página do onboarding
-/// 
+///
 /// Encapsula todas as informações necessárias para renderizar
 /// uma tela individual do fluxo de onboarding.
 class OnboardingPageModel {
@@ -66,4 +66,3 @@ class OnboardingData {
     return pages[index];
   }
 }
-

@@ -1,4 +1,14 @@
-# Miscellaneous
+# Evitar commit de segredos
+.env
+backend/.env
+
+# Flutter/Dart
+.dart_tool/
+build/
+
+# Node/Railway
+backend/node_modules/
+backend/.npmrc# Miscellaneous
 *.class
 *.log
 *.pyc

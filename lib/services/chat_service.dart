@@ -163,33 +163,71 @@ class ChatService {
     required bool isDriver,
   }) async {
     try {
+      // Validações de entrada
       if (message.trim().isEmpty) {
+        if (kDebugMode) {
+          print('⚠ Mensagem vazia, não enviando');
+        }
         return null;
       }
 
-      final messageMap = {
-        'rideId': rideId,
-        'senderId': senderId,
-        'senderName': senderName,
-        'senderPhotoURL': senderPhotoURL,
+      if (rideId.trim().isEmpty ||
+          senderId.trim().isEmpty ||
+          senderName.trim().isEmpty) {
+        if (kDebugMode) {
+          print('✗ Dados inválidos: rideId, senderId ou senderName vazios');
+          print('  rideId: "$rideId"');
+          print('  senderId: "$senderId"');
+          print('  senderName: "$senderName"');
+        }
+        throw Exception('Dados obrigatórios inválidos');
+      }
+
+      // Remove senderPhotoURL se for null para evitar problemas com regras do Firebase
+      final messageMap = <String, dynamic>{
+        'rideId': rideId.trim(),
+        'senderId': senderId.trim(),
+        'senderName': senderName.trim(),
         'message': message.trim(),
         'isDriver': isDriver,
         'timestamp':
             DateTime.now().millisecondsSinceEpoch, // Realtime Database usa int
       };
 
+      // Só adiciona senderPhotoURL se não for null
+      if (senderPhotoURL != null && senderPhotoURL.isNotEmpty) {
+        messageMap['senderPhotoURL'] = senderPhotoURL;
+      }
+
+      if (kDebugMode) {
+        print('📝 Preparando mensagem: $messageMap');
+      }
+
       // Cria referência para nova mensagem
       final messageRef = _messagesRef.push();
+
+      if (kDebugMode) {
+        print('🔑 Chave gerada: ${messageRef.key}');
+        print('📡 Enviando para Firebase...');
+      }
+
       await messageRef.set(messageMap);
 
       if (kDebugMode) {
-        print('✓ Mensagem enviada: ${messageRef.key}');
+        print('✓ Mensagem enviada com sucesso: ${messageRef.key}');
       }
 
       return messageRef.key;
-    } catch (e) {
+    } on Exception catch (e, stackTrace) {
       if (kDebugMode) {
-        print('✗ Erro ao enviar mensagem: $e');
+        print('✗ Erro ao enviar mensagem (Exception): $e');
+        print('Stack trace: $stackTrace');
+      }
+      rethrow;
+    } catch (e, stackTrace) {
+      if (kDebugMode) {
+        print('✗ Erro inesperado ao enviar mensagem: $e');
+        print('Stack trace: $stackTrace');
       }
       return null;
     }

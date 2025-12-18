@@ -3,6 +3,7 @@
 
 import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -191,8 +192,27 @@ class AuthService {
       // Cria conta no Firebase Auth
       final user = await createUserWithEmailAndPassword(email, password);
 
-      if (user != null && kDebugMode) {
-        print('✓ Conta criada após validação de token: ${user.email}');
+      if (user != null) {
+        // Marca o email como verificado no Firestore
+        // (O Firebase Auth não permite marcar emailVerified diretamente no client)
+        try {
+          await _firestoreService.updateUser(user.uid, {
+            'emailVerified': true,
+            'verifiedAt': FieldValue.serverTimestamp(),
+          });
+          
+          if (kDebugMode) {
+            print('✓ Email marcado como verificado no Firestore: ${user.email}');
+          }
+        } catch (e) {
+          if (kDebugMode) {
+            print('⚠ Erro ao atualizar status de verificação no Firestore: $e');
+          }
+        }
+
+        if (kDebugMode) {
+          print('✓ Conta criada após validação de token: ${user.email}');
+        }
       }
 
       return user;

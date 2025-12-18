@@ -46,6 +46,20 @@ class _AvaliacaoDialogState extends State<AvaliacaoDialog> {
       return;
     }
 
+    // Validação: não pode avaliar a si mesmo
+    if (widget.avaliadorUsuarioId == widget.avaliadoUsuarioId) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Você não pode avaliar a si mesmo'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        Navigator.of(context).pop();
+      }
+      return;
+    }
+
     // Verifica se já existe uma avaliação para esta carona e usuários
     final jaAvaliado = await _avaliacaoService.verificarAvaliacaoExistente(
       caronaId: widget.caronaId,

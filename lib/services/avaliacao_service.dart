@@ -50,6 +50,66 @@ class AvaliacaoService {
     }
   }
 
+  // Cache para nomes de usuários
+  final Map<String, String> _cacheNomesUsuarios = {};
+
+  /// Busca o nome de um usuário pelo ID com cache
+  Future<String> buscarNomeUsuarioPorId(String usuarioId) async {
+    // Verifica cache primeiro
+    if (_cacheNomesUsuarios.containsKey(usuarioId)) {
+      return _cacheNomesUsuarios[usuarioId]!;
+    }
+
+    try {
+      if (kDebugMode) {
+        print('🔍 Buscando nome do usuário: $usuarioId');
+      }
+
+      final doc = await _usuariosCollection.doc(usuarioId).get();
+
+      if (!doc.exists) {
+        if (kDebugMode) {
+          print('⚠️ Usuário $usuarioId não encontrado no Firestore');
+        }
+        return 'Usuário não encontrado';
+      }
+
+      final data = doc.data() as Map<String, dynamic>?;
+
+      if (data == null) {
+        return 'Usuário';
+      }
+
+      // Tenta múltiplos campos possíveis para o nome
+      String nome =
+          data['displayName'] as String? ??
+          data['fullName'] as String? ??
+          data['name'] as String? ??
+          data['email']?.toString().split('@')[0] ??
+          'Usuário';
+
+      if (kDebugMode) {
+        print('✓ Nome encontrado: $nome para usuário $usuarioId');
+        print('   Dados disponíveis: ${data.keys.join(', ')}');
+      }
+
+      // Armazena no cache
+      _cacheNomesUsuarios[usuarioId] = nome;
+
+      return nome;
+    } catch (e) {
+      if (kDebugMode) {
+        print('✗ Erro ao buscar nome do usuário $usuarioId: $e');
+      }
+      return 'Usuário';
+    }
+  }
+
+  /// Limpa o cache de nomes
+  void limparCacheNomes() {
+    _cacheNomesUsuarios.clear();
+  }
+
   /// Valida todas as referências antes de criar uma avaliação
   Future<void> _validarReferencias({
     required String caronaId,
@@ -268,15 +328,41 @@ class AvaliacaoService {
     String usuarioId,
   ) async {
     try {
-      final querySnapshot = await _avaliacoesCollection
-          .where('avaliado_usuario_id', isEqualTo: usuarioId)
-          .orderBy('data_avaliacao', descending: true)
-          .get();
+      if (kDebugMode) {
+        print('🔍 Buscando avaliações recebidas por: $usuarioId');
+      }
+
+      // Tenta primeiro com orderBy
+      QuerySnapshot querySnapshot;
+      try {
+        querySnapshot = await _avaliacoesCollection
+            .where('avaliado_usuario_id', isEqualTo: usuarioId)
+            .orderBy('data_avaliacao', descending: true)
+            .get();
+      } catch (e) {
+        // Se falhar (falta de índice), busca sem orderBy
+        if (kDebugMode) {
+          print('⚠️ Índice não encontrado, buscando sem orderBy: $e');
+        }
+        querySnapshot = await _avaliacoesCollection
+            .where('avaliado_usuario_id', isEqualTo: usuarioId)
+            .get();
+      }
+
+      if (kDebugMode) {
+        print(
+          '📊 Total de documentos encontrados: ${querySnapshot.docs.length}',
+        );
+      }
 
       final avaliacoes = <AvaliacaoModel>[];
 
       for (var doc in querySnapshot.docs) {
         try {
+          if (kDebugMode) {
+            print('📄 Processando avaliação: ${doc.id}');
+            print('   Dados: ${doc.data()}');
+          }
           final avaliacao = AvaliacaoModel.fromFirestore(doc);
           avaliacoes.add(avaliacao);
         } catch (e) {
@@ -285,6 +371,9 @@ class AvaliacaoService {
           }
         }
       }
+
+      // Ordena manualmente se não foi possível usar orderBy no Firestore
+      avaliacoes.sort((a, b) => b.dataAvaliacao.compareTo(a.dataAvaliacao));
 
       if (kDebugMode) {
         print(
@@ -356,6 +445,16 @@ class AvaliacaoService {
     required String avaliadoUsuarioId,
   }) async {
     try {
+      // Validação: um usuário não pode avaliar a si mesmo
+      if (avaliadorUsuarioId == avaliadoUsuarioId) {
+        if (kDebugMode) {
+          print(
+            '⚠️ Ignorando verificação: usuário não pode avaliar a si mesmo',
+          );
+        }
+        return true; // Retorna true para evitar mostrar como pendente
+      }
+
       if (kDebugMode) {
         print('🔍 Verificando avaliação existente:');
         print('  - Carona ID: $caronaId');
@@ -532,6 +631,11 @@ class AvaliacaoService {
           final requestData = requestDoc.data();
           final passengerId = requestData['passengerId'] as String;
 
+          // Ignora se for o próprio motorista (regra de negócio: não pode avaliar a si mesmo)
+          if (passengerId == motoristaId) {
+            continue;
+          }
+
           // Verifica se já avaliou este passageiro
           final jaAvaliado = await verificarAvaliacaoExistente(
             caronaId: rideId,
@@ -608,6 +712,11 @@ class AvaliacaoService {
         if (status != 'completed') continue;
 
         final driverId = rideData['driverId'] as String;
+
+        // Ignora se for o próprio passageiro (regra de negócio: não pode avaliar a si mesmo)
+        if (driverId == passageiroId) {
+          continue;
+        }
 
         // Verifica se já avaliou o motorista
         final jaAvaliado = await verificarAvaliacaoExistente(

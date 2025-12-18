@@ -7,6 +7,7 @@ import '../services/auth_service.dart';
 import '../services/notification_service.dart';
 import '../services/preferences_service.dart';
 import '../services/user_data_service.dart';
+import 'reset_password_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -205,9 +206,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Email de redefinição enviado para ${user.email}.'),
+          content: Text('Email enviado para ${user.email}'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
         ),
       );
+
+      // Aguarda um momento para o usuário ver a mensagem
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      // Navega para a tela de reset de senha
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ResetPasswordScreen(
+              email: user.email,
+              token: '', // Token será digitado na tela
+            ),
+          ),
+        );
+      }
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

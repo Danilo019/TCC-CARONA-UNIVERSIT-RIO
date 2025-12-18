@@ -3,7 +3,7 @@ import '../services/location_service.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 
 /// Tela de solicitação de permissão de localização
-/// 
+///
 /// Exibida após o onboarding, solicita ao usuário permissão
 /// para acessar a localização do dispositivo.
 /// Após conceder permissão, navega para a tela de login.
@@ -30,10 +30,7 @@ class _LocationRequestScreenState extends State<LocationRequestScreen>
     )..repeat(reverse: true);
 
     _pulseAnimation = Tween<double>(begin: 0.95, end: 1.05).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.easeInOut,
-      ),
+      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
   }
 
@@ -157,10 +154,7 @@ class _LocationRequestScreenState extends State<LocationRequestScreen>
                   ),
                   child: const Text(
                     'Ativar Localização',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
@@ -172,10 +166,7 @@ class _LocationRequestScreenState extends State<LocationRequestScreen>
                 onPressed: _skipLocationRequest,
                 child: Text(
                   'Continuar sem localização',
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 16,
-                  ),
+                  style: TextStyle(color: Colors.grey[600], fontSize: 16),
                 ),
               ),
 
@@ -202,11 +193,7 @@ class _LocationRequestScreenState extends State<LocationRequestScreen>
             color: const Color(0xFF2196F3).withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Icon(
-            icon,
-            color: const Color(0xFF2196F3),
-            size: 28,
-          ),
+          child: Icon(icon, color: const Color(0xFF2196F3), size: 28),
         ),
         const SizedBox(width: 16),
         Expanded(
@@ -224,10 +211,7 @@ class _LocationRequestScreenState extends State<LocationRequestScreen>
               const SizedBox(height: 4),
               Text(
                 description,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[600],
-                ),
+                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
               ),
             ],
           ),
@@ -238,27 +222,22 @@ class _LocationRequestScreenState extends State<LocationRequestScreen>
 
   /// Solicita permissão de localização
   void _requestLocationPermission() async {
-    final locationService = LocationService();
-
-    // Se ainda não temos permissão, mostrar uma breve explicação (rationale)
-    final alreadyGranted = await locationService.hasLocationPermission();
-    if (!alreadyGranted) {
-      final proceed = await _showPermissionRationale();
-      if (!proceed) return;
-    }
-
-    _showLoadingDialog();
-
     try {
+      final locationService = LocationService();
+
       // Verifica se o serviço de localização está habilitado
       final isEnabled = await locationService.isLocationServiceEnabled();
 
       if (!isEnabled) {
         if (mounted) {
-          Navigator.of(context).pop(); // Fecha o diálogo
           _showLocationDisabledDialog();
         }
         return;
+      }
+
+      // Mostra loading apenas depois da verificação inicial
+      if (mounted) {
+        _showLoadingDialog();
       }
 
       // Solicita permissão
@@ -268,16 +247,24 @@ class _LocationRequestScreenState extends State<LocationRequestScreen>
         Navigator.of(context).pop(); // Fecha o diálogo de loading
 
         if (granted) {
+          // Mostra sucesso antes de tentar obter localização
+          _showSuccessSnackBar('Permissão concedida com sucesso!');
+
           // Tenta obter localização atual para validar
           final position = await locationService.getCurrentLocation();
 
           if (position != null) {
             if (kDebugMode) {
-              print('✓ Localização obtida com sucesso: ${position.latitude}, ${position.longitude}');
+              print(
+                '✓ Localização obtida: ${position.latitude}, ${position.longitude}',
+              );
             }
+          }
+
+          // Navega independentemente de conseguir obter a localização
+          await Future.delayed(const Duration(milliseconds: 500));
+          if (mounted) {
             _navigateToLogin();
-          } else {
-            _showPermissionErrorDialog();
           }
         } else {
           // Verifica se foi negada permanentemente
@@ -296,7 +283,11 @@ class _LocationRequestScreenState extends State<LocationRequestScreen>
       }
 
       if (mounted) {
-        Navigator.of(context).pop(); // Fecha o diálogo
+        // Tenta fechar diálogo se estiver aberto
+        try {
+          Navigator.of(context).pop();
+        } catch (_) {}
+
         _showErrorDialog('Erro ao solicitar permissão de localização');
       }
     }
@@ -309,7 +300,8 @@ class _LocationRequestScreenState extends State<LocationRequestScreen>
           builder: (context) => AlertDialog(
             title: const Text('Permissão de Localização'),
             content: const Text(
-                'Para encontrar caronas próximas e oferecer rotas precisas, precisamos acessar sua localização. Deseja permitir agora?'),
+              'Para encontrar caronas próximas e oferecer rotas precisas, precisamos acessar sua localização. Deseja permitir agora?',
+            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
@@ -442,5 +434,25 @@ class _LocationRequestScreenState extends State<LocationRequestScreen>
       'Não foi possível obter sua localização. Você pode continuar usando o app sem localização.',
     );
   }
-}
 
+  /// Exibe mensagem de sucesso
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(message, style: const TextStyle(fontSize: 16)),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+}

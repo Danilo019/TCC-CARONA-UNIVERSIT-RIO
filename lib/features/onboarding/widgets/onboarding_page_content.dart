@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../models/onboarding_page_model.dart';
-import 'page_indicator.dart';
 import 'wave_clipper.dart';
 
 /// Widget que renderiza o conteúdo de uma página individual do onboarding
-/// 
+///
 /// Composto por:
 /// - Seção superior: Ilustração
 /// - Seção inferior: Painel com gradiente azul oceano, efeito de onda, título e descrição
@@ -32,21 +31,25 @@ class OnboardingPageContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final screenHeight = MediaQuery.of(context).size.height;
-    // Calcula altura da ilustração e aplica limites para evitar overflow em telas pequenas
-    final rawIllustrationHeight = screenHeight * illustrationHeightRatio;
-  final illustrationHeight = rawIllustrationHeight.clamp(160.0, screenHeight * 0.6);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final screenHeight = constraints.maxHeight;
+        final illustrationHeight = screenHeight * illustrationHeightRatio;
+        final panelHeight = screenHeight - illustrationHeight;
 
-    return Column(
-      children: [
-        // Seção Superior: Ilustração
-        _buildIllustrationSection(illustrationHeight),
+        return SingleChildScrollView(
+          physics: const ClampingScrollPhysics(),
+          child: Column(
+            children: [
+              // Seção Superior: Ilustração
+              _buildIllustrationSection(illustrationHeight),
 
-        // Seção Inferior: Painel Informativo com Gradiente
-        Expanded(
-          child: _buildInfoPanel(context),
-        ),
-      ],
+              // Seção Inferior: Painel Informativo com Gradiente
+              SizedBox(height: panelHeight, child: _buildInfoPanel(context)),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -81,61 +84,62 @@ class OnboardingPageContent extends StatelessWidget {
 
   /// Constrói o painel informativo com gradiente e efeito de onda
   Widget _buildInfoPanel(BuildContext context) {
-    return ClipPath(
-      clipper: WaveClipper(
-        waveAmplitude: 35.0,
-        waveFrequency: 1.5,
-      ),
-      child: Container(
-        width: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: AppColors.onboardingGradient,
-        ),
-      child: Padding(
-        // Aumenta o padding inferior para evitar que os controles (posição bottom)
-        // sobreponham o conteúdo informativo nas telas menores.
-        padding: const EdgeInsets.fromLTRB(24, 60, 24, 120),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Título
-              Text(
-                page.title,
-                style: const TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textOnDark,
-                  letterSpacing: 0.5,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              
-              const SizedBox(height: 24),
-              
-              // Descrição
-              Text(
-                page.description,
-                style: const TextStyle(
-                  fontSize: 16,
-                  height: 1.6,
-                  color: AppColors.textOnDarkSecondary,
-                  letterSpacing: 0.2,
-                ),
-                textAlign: TextAlign.center,
-              ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Calcula tamanhos responsivos baseados na altura disponível
+        final availableHeight = constraints.maxHeight;
+        final titleFontSize = (availableHeight * 0.08).clamp(20.0, 28.0);
+        final descriptionFontSize = (availableHeight * 0.045).clamp(14.0, 16.0);
+        final topPadding = (availableHeight * 0.12).clamp(40.0, 60.0);
 
-              const SizedBox(height: 24),
+        return ClipPath(
+          clipper: WaveClipper(waveAmplitude: 35.0, waveFrequency: 1.5),
+          child: Container(
+            width: double.infinity,
+            height: availableHeight,
+            decoration: const BoxDecoration(
+              gradient: AppColors.onboardingGradient,
+            ),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(24, topPadding, 24, 40),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Título
+                  Text(
+                    page.title,
+                    style: TextStyle(
+                      fontSize: titleFontSize,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textOnDark,
+                      letterSpacing: 0.5,
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
 
-              // Indicador de página posicionado abaixo do texto
-              if (currentPage != null && pageCount != null)
-                PageIndicator(
-                  pageCount: pageCount!,
-                  currentPage: currentPage!,
-                ),
-            ],
+                  SizedBox(height: availableHeight * 0.04),
+
+                  // Descrição
+                  Text(
+                    page.description,
+                    style: TextStyle(
+                      fontSize: descriptionFontSize,
+                      height: 1.6,
+                      color: AppColors.textOnDarkSecondary,
+                      letterSpacing: 0.2,
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 6,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -144,75 +148,93 @@ class OnboardingPageContent extends StatelessWidget {
 class CompactOnboardingPageContent extends StatelessWidget {
   final OnboardingPageModel page;
 
-  const CompactOnboardingPageContent({
-    super.key,
-    required this.page,
-  });
+  const CompactOnboardingPageContent({super.key, required this.page});
 
   @override
   Widget build(BuildContext context) {
     return ClipPath(
       clipper: WaveClipper(waveAmplitude: 30.0),
       child: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.onboardingGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.onboardingGradient),
         child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                // Ilustração compacta (usa constraints para evitar overflow)
-                Flexible(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 200),
-                    child: Image.asset(
-                      page.imagePath,
-                      fit: BoxFit.contain,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Icon(
-                          Icons.directions_car,
-                          size: 80,
-                          color: AppColors.white,
-                        );
-                      },
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final availableHeight = constraints.maxHeight;
+              final imageHeight = (availableHeight * 0.3).clamp(120.0, 200.0);
+              final titleFontSize = (availableHeight * 0.036).clamp(20.0, 26.0);
+              final descriptionFontSize = (availableHeight * 0.021).clamp(
+                13.0,
+                15.0,
+              );
+
+              return SingleChildScrollView(
+                physics: const ClampingScrollPhysics(),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: availableHeight),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 40,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        // Ilustração compacta
+                        SizedBox(
+                          height: imageHeight,
+                          child: Image.asset(
+                            page.imagePath,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Icon(
+                                Icons.directions_car,
+                                size: imageHeight * 0.4,
+                                color: AppColors.white,
+                              );
+                            },
+                          ),
+                        ),
+
+                        SizedBox(height: availableHeight * 0.04),
+
+                        // Conteúdo textual
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              page.title,
+                              style: TextStyle(
+                                fontSize: titleFontSize,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textOnDark,
+                              ),
+                              textAlign: TextAlign.center,
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            SizedBox(height: availableHeight * 0.025),
+                            Text(
+                              page.description,
+                              style: TextStyle(
+                                fontSize: descriptionFontSize,
+                                height: 1.5,
+                                color: AppColors.textOnDarkSecondary,
+                              ),
+                              textAlign: TextAlign.center,
+                              maxLines: 5,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
-                ),
-                
-                const SizedBox(height: 32),
-                
-                // Conteúdo textual
-                Column(
-                  children: [
-                    Text(
-                      page.title,
-                      style: const TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textOnDark,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      page.description,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        height: 1.5,
-                        color: AppColors.textOnDarkSecondary,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              ],
-            ),
+                );
+              );
+            },
           ),
         ),
       ),
     );
   }
 }
-

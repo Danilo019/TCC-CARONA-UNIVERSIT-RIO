@@ -105,10 +105,33 @@ class _ChatScreenState extends State<ChatScreen> {
     });
 
     try {
+      // Validação robusta do senderName com múltiplos fallbacks
+      String senderName;
+      
+      // Prioridade 1: displayName do usuário
+      if (user.displayName != null && user.displayName!.trim().isNotEmpty) {
+        senderName = user.displayName!.trim();
+      } 
+      // Prioridade 2: parte local do email (antes do @)
+      else if (user.email.trim().isNotEmpty) {
+        final emailParts = user.email.trim().split('@');
+        senderName = emailParts.isNotEmpty && emailParts[0].isNotEmpty 
+            ? emailParts[0] 
+            : 'Usuário';
+      } 
+      // Prioridade 3: fallback seguro
+      else {
+        senderName = 'Usuário';
+      }
+      
+      if (kDebugMode) {
+        print('📤 Enviando mensagem: "$message" de $senderName (uid: ${user.uid})');
+      }
+      
       final messageId = await _chatService.sendMessage(
         rideId: widget.ride.id,
         senderId: user.uid,
-        senderName: user.displayName ?? user.email,
+        senderName: senderName,
         senderPhotoURL: user.photoURL,
         message: message,
         isDriver: widget.isDriver,
@@ -208,10 +231,23 @@ class _ChatScreenState extends State<ChatScreen> {
           ? '📍 Ponto de embarque sugerido:\n$addressMessage\n\n(Coordenadas: ${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)})'
           : locationMessage;
 
+      // Validação robusta do senderName com múltiplos fallbacks
+      String senderName;
+      if (user.displayName != null && user.displayName!.trim().isNotEmpty) {
+        senderName = user.displayName!.trim();
+      } else if (user.email.trim().isNotEmpty) {
+        final emailParts = user.email.trim().split('@');
+        senderName = emailParts.isNotEmpty && emailParts[0].isNotEmpty 
+            ? emailParts[0] 
+            : 'Usuário';
+      } else {
+        senderName = 'Usuário';
+      }
+
       final messageId = await _chatService.sendMessage(
         rideId: widget.ride.id,
         senderId: user.uid,
-        senderName: user.displayName ?? user.email,
+        senderName: senderName,
         senderPhotoURL: user.photoURL,
         message: messageText,
         isDriver: widget.isDriver,
