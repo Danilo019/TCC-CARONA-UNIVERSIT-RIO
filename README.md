@@ -8,181 +8,313 @@
 
 ## 📋 Visão Geral
 
-O **Carona Universitária UDF** é um aplicativo Flutter que conecta estudantes, professores e colaboradores para compartilhamento solidário de caronas. Focado em **segurança**, **sustentabilidade** e **economia**, reduzindo trânsito e emissão de CO₂.
+O **Carona Universitária UDF** é um aplicativo Flutter que conecta estudantes, professores e colaboradores para compartilhamento solidário de caronas. Focado em **segurança**, **sustentabilidade** e **economia**, reduzindo trânsito e emissão de CO₂
 
-**Status atual** (parcialmente implementado):
-- ✅ Autenticação (Firebase Auth)
-- ✅ Perfil do usuário e edição básica
-- ✅ Histórico de viagens
-- ✅ Criação/listagem de caronas (motorista / passageiro)
-- ✅ Geolocalização + Google Maps / Distance Matrix
-- ✅ Chat interno (mensagens) e contador de não lidas
-- ✅ Notificações (Firebase Messaging)
-- ✅ Exclusão definitiva de conta (LGPD)
-- 🚧 Sistema de avaliação / reputação
-- 🚧 Recomendações inteligentes
-- 🚧 Melhorias em acessibilidade e internacionalização
 
-## 🎯 Principais Funcionalidades
+# 🚗 TCC - Carona Universitária
 
-- Cadastro validado e seguro (domínio institucional)
-- Geolocalização para encontrar e exibir caronas no mapa
-- Canal de mensagens interno
-- Histórico de viagens
-- Notificações push
-- Exclusão de conta (Direito ao Esquecimento / LGPD)
-- Estrutura preparada para avaliações e reputação
+Aplicativo mobile de compartilhamento de caronas para estudantes universitários, desenvolvido com **Flutter** e **Firebase**, com backend em **Node.js** hospedado na **Railway**.
 
-## 🧱 Arquitetura / Estrutura
+---
 
-```
-lib/
-  core/           # Helpers e infra comum
-  features/       # Módulos funcionais
-  screens/        # Telas principais (home, perfil, viagens...)
-  widgets/        # Componentes reutilizáveis
-  services/       # Integrações (Firebase, Maps, localização)
-  providers/      # Estado (Provider)
-  models/         # Modelos de domínio
-backend/
-  server.js       # API Node (reset de senha)
-  package.json    # Dependências backend
-android/          # Configuração Android / build / keystore
-ios/              # Projeto iOS (in progress)
-```
+## ✨ Principais Funcionalidades
+
+- 🔐 **Autenticação Segura**: Firebase Auth + Sistema de verificação por email token (Railway)
+- 👤 **Perfil de Usuário**: Edição de dados pessoais e foto de perfil
+- 🚗 **Caronas**: Criar, listar e gerenciar caronas como motorista ou passageiro
+- 📍 **Geolocalização**: Integração com Google Maps e Distance Matrix
+- 💬 **Chat Interno**: Sistema de mensagens entre usuários em tempo real
+- 🔔 **Notificações**: Push notifications via Firebase Messaging
+- ⭐ **Sistema de Avaliações**: Avaliar usuários e visualizar reputação
+- 🎯 **Onboarding Interativo**: Fluxo de boas-vindas com animações
+- 📋 **Termos & Privacidade**: Consentimento LGPD integrado
+- 🗑️ **Exclusão de Conta**: Deletar dados em conformidade com LGPD
+- 🔐 **Segurança**: Criptografia de dados sensíveis e validação robusta
+
+---
 
 ## 🛠️ Tecnologias
 
-| Categoria | Stack |
-|-----------|-------|
-| Mobile | Flutter (Dart) |
-| Backend | Node.js + Express |
-| Auth / Dados | Firebase Auth, Firestore, Storage, Functions |
-| Push | Firebase Cloud Messaging + flutter_local_notifications |
-| Mapas | google_maps_flutter + Distance Matrix API |
-| Localização | geolocator + permission_handler |
-| Estado | Provider |
-| Compartilhamento | share_plus |
-| Persistência local | shared_preferences |
-| Build Infra | Railway (Nixpacks) |
-| Versionamento | Git + GitHub |
+| Camada | Tecnologia | Versão |
+|--------|-----------|--------|
+| Frontend | Flutter | ^3.0.0 |
+| Backend | Node.js + Express | ^18.0.0 |
+| Autenticação | Firebase Auth | Latest |
+| Banco de Dados | Firebase Firestore | Latest |
+| Armazenamento | Firebase Storage | Latest |
+| Notificações | Firebase Cloud Messaging | Latest |
+| Deploy Backend | Railway | - |
+| Mapas | Google Maps API | Latest |
 
-## � Requisitos
+---
 
-| Item | Versão recomendada |
-|------|--------------------|
-| Flutter SDK | 3.35.x |
-| Dart | 3.9.x |
-| Android SDK | API 21+ (min) |
-| Node.js (backend) | 18.x |
-| Firebase Project | Criado em console.firebase.google.com |
+## 📋 Pré-requisitos
 
-## 🚀 Instalação (Frontend)
+- Flutter SDK: `^3.0.0`
+- Node.js: `^18.0.0`
+- Dart: `^3.0.0`
+- Conta Firebase com projeto configurado
+- API Key Google Maps (iOS + Android)
+- Conta Railway para deploy do backend
+
+---
+
+## 📁 Estrutura do Projeto
+
+```
+TCC-CARONA-UNIVERSIT-RIO/
+├── lib/
+│   ├── core/
+│   │   ├── extensions/       # Extensões de widgets e tipos
+│   │   ├── helpers/          # Funções auxiliares
+│   │   ├── services/         # Serviços compartilhados
+│   │   │   ├── consent_service.dart         # 🆕 Gerenciamento de consentimentos
+│   │   │   ├── account_deletion_service.dart # 🆕 LGPD compliance
+│   │   │   └── email_token_service.dart      # 🆕 Autenticação por token
+│   │   └── theme/            # Cores, estilos, tipografia
+│   ├── features/
+│   │   ├── onboarding/       # 🆕 Sistema de boas-vindas
+│   │   │   ├── models/
+│   │   │   ├── screens/
+│   │   │   ├── widgets/
+│   │   │   │   ├── onboarding_page_content.dart
+│   │   │   │   └── wave_clipper.dart
+│   │   │   └── onboarding_screen.dart
+│   │   ├── auth/             # Autenticação
+│   │   ├── home/             # Tela inicial
+│   │   ├── chat/             # Sistema de mensagens
+│   │   ├── rides/            # Caronas
+│   │   ├── profile/          # Perfil do usuário
+│   │   ├── ratings/          # 🆕 Avaliações
+│   │   └── legal/            # 🆕 Políticas e Termos
+│   │       ├── privacy_policy_screen.dart
+│   │       ├── terms_of_service_screen.dart
+│   │       └── legal_models.dart
+│   ├── screens/              # Telas globais
+│   └── main.dart
+├── backend/
+│   ├── src/
+│   │   ├── controllers/
+│   │   ├── models/
+│   │   ├── routes/
+│   │   ├── middleware/
+│   │   └── services/
+│   ├── .env.example
+│   ├── package.json
+│   └── railway.json
+└── assets/
+    ├── images/onboarding/    # 🆕 Ilustrações do onboarding
+    └── ...
+```
+
+---
+
+## 🚀 Começando
+
+### 1️⃣ Clone o repositório
 
 ```bash
 git clone https://github.com/Danilo019/TCC-CARONA-UNIVERSIT-RIO.git
 cd TCC-CARONA-UNIVERSIT-RIO
-flutter pub get
-flutter run
 ```
 
-Se necessário gerar novamente `firebase_options.dart`:
+### 2️⃣ Configuração Frontend (Flutter)
+
 ```bash
-flutter pub add firebase_core
-flutterfire configure
+cd lib
+flutter pub get
 ```
 
-## 🌐 Backend (Reset de Senha)
+#### Configure Firebase
+
+1. Crie um projeto no [Firebase Console](https://console.firebase.google.com)
+2. Adicione um app Android e iOS
+3. Baixe `google-services.json` (Android) e `GoogleService-Info.plist` (iOS)
+4. Coloque os arquivos nas pastas corretas:
+   - Android: `android/app/src/main/google-services.json`
+   - iOS: `ios/Runner/GoogleService-Info.plist`
+
+#### Configure Google Maps API
+
+1. Habilite Google Maps Platform e Distance Matrix API
+2. Configure as chaves de API:
+   - **Android**: `android/app/src/main/AndroidManifest.xml`
+   - **iOS**: `ios/Runner/Info.plist`
+
+### 3️⃣ Configuração Backend (Node.js)
 
 ```bash
 cd backend
 npm install
-# Variáveis de ambiente:
-# FIREBASE_SERVICE_ACCOUNT (JSON string) OU FIREBASE_PROJECT_ID
-npm start
 ```
 
-Endpoints:
-- `GET /` Health check
-- `POST /api/reset-password` Redefinição de senha com token + email
+#### Variáveis de Ambiente
 
-## 🔐 Variáveis de Ambiente (Exemplo .env)
+Crie `.env` baseado em `.env.example`:
 
-```
-GOOGLE_MAPS_API_KEY=SEU_TOKEN_AQUI
-FIREBASE_WEB_API_KEY=SEU_TOKEN_AQUI
-FIREBASE_PROJECT_ID=carona-udf
-```
+```env
+PORT=3000
+NODE_ENV=development
 
-Backend (Railway):
-```
-FIREBASE_SERVICE_ACCOUNT={"type":"service_account","project_id":"..."}
-```
+# Firebase
+FIREBASE_PROJECT_ID=seu-projeto-id
+FIREBASE_PRIVATE_KEY=sua-chave-privada
+FIREBASE_CLIENT_EMAIL=seu-email-de-servico
 
-## 📲 Build Android
+# JWT Token
+JWT_SECRET=sua-chave-secreta-jwt
+JWT_EXPIRES_IN=7d
 
-Gerar APK universal:
-```bash
-flutter build apk --release
-```
+# Email (para reset de senha e verificação)
+SMTP_USER=seu-email@gmail.com
+SMTP_PASSWORD=sua-senha-app
 
-Split por ABI (menor tamanho):
-```bash
-flutter build apk --release --split-per-abi
+# Railway (após deploy)
+DATABASE_URL=url-do-banco-producao
 ```
 
-App Bundle (Play Store):
-```bash
-flutter build appbundle --release
-```
-
-Keystore (exemplo Windows):
-```bash
-keytool -genkey -v -keystore C:\chaves\carona-release.keystore -alias carona_release -keyalg RSA -keysize 2048 -validity 10000
-```
-
-Arquivo `android/key.properties` (não versionar):
-```
-storePassword=MINHA_SENHA
-keyPassword=MINHA_SENHA
-keyAlias=carona_release
-storeFile=C:/chaves/carona-release.keystore
-```
-
-## 🧪 Testes
+#### Deploy no Railway
 
 ```bash
-flutter test
+railway login
+railway link  # Conectar ao projeto Railway existente
+railway up    # Deploy
 ```
 
-## 🛡️ Segurança & Privacidade
+### 4️⃣ Execute a Aplicação
 
-- Senhas armazenadas pelo Firebase Auth
-- Tokens temporários para reset de senha
-- Exclusão definitiva de conta remove registros pessoais
-- Restrições de email institucional (@cs.udf.edu.br)
-- Uso de HTTPS via Firebase / Railway
+```bash
+flutter run
+```
 
-## �️ Roadmap
+---
 
-- [ ] Sistema de avaliação/reputação
+## 📚 Documentação
+
+### Autenticação por Email Token (🆕)
+
+O sistema utiliza verificação por email token para segurança adicional:
+
+1. Usuário faz login/registro com email
+2. Backend envia token de 6 dígitos via email
+3. Usuário insere o token na app
+4. Token é validado e JWT é gerado
+
+```dart
+// Exemplo de uso
+final authService = EmailTokenService();
+final result = await authService.verifyEmailToken(
+  email: 'user@example.com',
+  token: '123456',
+);
+```
+
+### Sistema de Consentimento (🆕)
+
+Conformidade com LGPD - O usuário deve aceitar Política de Privacidade e Termos de Serviço:
+
+```dart
+// Exemplo
+final consentService = ConsentService();
+await consentService.saveConsent(
+  userId: 'user123',
+  privacyPolicy: true,
+  termsOfService: true,
+  timestamp: DateTime.now(),
+);
+```
+
+### Avaliações (🆕)
+
+```dart
+// Avaliar um usuário
+await ratingsService.createRating(
+  ratedUserId: 'user123',
+  rating: 5,
+  comment: 'Excelente motorista!',
+);
+```
+
+### Reset de Senha
+
+Veja [backend/README.md](./backend/README.md) para documentação completa.
+
+---
+
+## ✅ Status de Implementação
+
+- ✅ Autenticação (Firebase Auth + Email Token System)
+- ✅ Perfil do usuário e edição
+- ✅ Histórico de viagens
+- ✅ Criação/listagem de caronas (motorista / passageiro)
+- ✅ Geolocalização + Google Maps / Distance Matrix
+- ✅ Chat interno (mensagens)
+- ✅ Notificações (Firebase Messaging)
+- ✅ Exclusão definitiva de conta (LGPD)
+- ✅ Onboarding com animações
+- ✅ Sistema de Avaliações (usuários + sistema)
+- ✅ Token System (Railway Backend)
+- ✅ Políticas de Privacidade + Termos integrados
+- 🚧 Recomendações inteligentes
+- 🚧 Melhorias em acessibilidade
+
+---
+
+## 🛣️ Roadmap
+
+- [x] Autenticação segura com Firebase
+- [x] Sistema de caronas básico
+- [x] Chat interno
+- [x] Notificações push
+- [x] Autenticação por Email Token (Railway)
+- [x] Onboarding com animações
+- [x] Sistema de avaliações
 - [ ] Recomendação inteligente de caronas
 - [ ] Internacionalização (i18n)
 - [ ] Suporte iOS produção / TestFlight
 - [ ] Dark mode refinado
 - [ ] Monitoramento de performance (Firebase Performance)
+- [ ] Geofencing para notificações automáticas
 
-## 🤝 Contribuição
+---
 
-1. Fork & branch: `feature/nova-feature`
-2. Commits seguindo convenção: `feat:`, `fix:`, `chore:`, `docs:`
-3. Pull Request descrevendo contexto, prints, testes
-4. Código analisado por lint (`flutter analyze` / `flutter test`)
+## 🔒 Segurança & Privacidade
+
+Este projeto segue as melhores práticas de segurança:
+
+- 🔐 **Autenticação**: Firebase Auth + Email Token Verification
+- 🔒 **Criptografia**: Dados sensíveis criptografados em trânsito (HTTPS/TLS)
+- 📋 **LGPD Compliant**: Consentimento explícito e exclusão de dados
+- 🛡️ **Validação**: Input validation em frontend e backend
+- 🚫 **Rate Limiting**: Proteção contra abuso de API
+- 🔐 **Secrets**: Variáveis sensíveis em `.env` (nunca commitadas)
+
+**Política de Privacidade**: Veja `lib/features/legal/privacy_policy_screen.dart`
+**Termos de Serviço**: Veja `lib/features/legal/terms_of_service_screen.dart`
+
+---
+
+## 🤝 Contribuindo
+
+1. Crie uma branch para sua feature: `git checkout -b feature/minha-feature`
+2. Commit suas mudanças: `git commit -m 'Add: descrição da feature'`
+3. Push para a branch: `git push origin feature/minha-feature`
+4. Abra um Pull Request
+
+---
+
+## 📞 Suporte
+
+- **Issues**: [GitHub Issues](https://github.com/Danilo019/TCC-CARONA-UNIVERSIT-RIO/issues)
+- **Pull Requests**: [GitHub Pull Requests](https://github.com/Danilo019/TCC-CARONA-UNIVERSIT-RIO/pulls)
+
+---
 
 ## 📄 Licença
 
-Este projeto está licenciado sob os termos do arquivo `LICENSE`.
+Este projeto é licenciado sob a MIT License - veja o arquivo [LICENSE](./LICENSE) para detalhes.
 
+-
 ## 👥 Autores
 
 - **Danilo Teodoro dos Santos Silva**

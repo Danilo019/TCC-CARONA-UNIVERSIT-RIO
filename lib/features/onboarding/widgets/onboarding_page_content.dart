@@ -229,7 +229,7 @@ class CompactOnboardingPageContent extends StatelessWidget {
                       ],
                     ),
                   ),
-                );
+                ),
               );
             },
           ),
