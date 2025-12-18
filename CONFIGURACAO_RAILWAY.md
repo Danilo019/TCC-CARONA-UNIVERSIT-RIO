@@ -31,30 +31,30 @@
 
 1. Acesse: https://myaccount.google.com/apppasswords
 2. Crie uma "Senha de app" (não use sua senha normal)
-3. No Railway, adicione as variáveis:
+3. No Railway, adicione as variáveis com PLACEHOLDERS (não comite valores reais):
 
 ```
 SMTP_SERVICE=gmail
-SMTP_USER=seu-email@gmail.com
-SMTP_PASS=xxxx xxxx xxxx xxxx (senha de app gerada)
+SMTP_USER=<YOUR_GMAIL_ADDRESS>
+SMTP_PASS=<YOUR_GMAIL_APP_PASSWORD>
 ```
 
 #### Opção B: Outlook/Hotmail
 
 ```
 SMTP_SERVICE=hotmail
-SMTP_USER=seu-email@hotmail.com
-SMTP_PASS=sua-senha
+SMTP_USER=<YOUR_HOTMAIL_ADDRESS>
+SMTP_PASS=<YOUR_OUTLOOK_APP_PASSWORD>
 ```
 
 #### Opção C: SMTP Customizado
 
 ```
 SMTP_SERVICE=smtp
-SMTP_HOST=smtp.seuservidor.com
-SMTP_PORT=587
-SMTP_USER=seu-email@dominio.com
-SMTP_PASS=sua-senha
+SMTP_HOST=<YOUR_SMTP_HOST>
+SMTP_PORT=<YOUR_SMTP_PORT>
+SMTP_USER=<YOUR_SMTP_USERNAME>
+SMTP_PASS=<YOUR_SMTP_PASSWORD>
 ```
 
 ### 2. Deploy dos Índices Firestore
@@ -135,3 +135,6 @@ O app agora usa automaticamente o Railway. Basta:
 ---
 
 **Sistema configurado! Agora os e-mails serão enviados via Railway.** 📧✅
+
+> Importante: Nunca commite credenciais reais em arquivos `.md`, `.env` ou código.
+> Use variáveis de ambiente no Railway e mantenha somente exemplos com placeholders.
