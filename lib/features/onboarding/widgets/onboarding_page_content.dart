@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../models/onboarding_page_model.dart';
-import 'page_indicator.dart';
 import 'wave_clipper.dart';
 
 /// Widget que renderiza o conteúdo de uma página individual do onboarding
@@ -227,10 +226,10 @@ class CompactOnboardingPageContent extends StatelessWidget {
                             ),
                           ],
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
+                );
               );
             },
           ),
