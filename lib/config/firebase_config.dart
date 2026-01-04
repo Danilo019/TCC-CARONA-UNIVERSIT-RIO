@@ -8,17 +8,17 @@ class FirebaseConfig {
   // Configurações para desenvolvimento (lê do .env)
   static Map<String, dynamic> get development => {
     'apiKey': dotenv.env['FIREBASE_API_KEY_DEV'] ?? 
-              (kDebugMode ? 'AIzaSyD-gR7ZV9EkQKpfRUwPdnXyB4NLb7Kj8QM' : ''),
+              '',
     'authDomain': dotenv.env['FIREBASE_AUTH_DOMAIN_DEV'] ?? 
-                  'carona-universitiaria.firebaseapp.com',
+                  'your-project-id.firebaseapp.com',
     'projectId': dotenv.env['FIREBASE_PROJECT_ID_DEV'] ?? 
-                 'carona-universitiaria',
+                 'your-project-id',
     'storageBucket': dotenv.env['FIREBASE_STORAGE_BUCKET_DEV'] ?? 
-                     'carona-universitiaria.firebasestorage.app',
+                     'your-project-id.firebasestorage.app',
     'messagingSenderId': dotenv.env['FIREBASE_MESSAGING_SENDER_ID_DEV'] ?? 
-                         '83995365801',
+                         '',
     'appId': dotenv.env['FIREBASE_APP_ID_DEV'] ?? 
-             '1:83995365801:android:23b104d813b51cdbc4f4b8',
+             '',
   };
 
   // Configurações para produção (lê do .env)
@@ -40,7 +40,7 @@ class FirebaseConfig {
   // Configurações do Microsoft Azure AD (lê do .env)
   static String get microsoftClientId => 
       dotenv.env['MICROSOFT_CLIENT_ID'] ?? 
-      '369b4e14-e96e-4710-9d72-d3413a315cb5';
+      'YOUR_MICROSOFT_CLIENT_ID_HERE';
   
   static String get microsoftTenantId => 
       dotenv.env['MICROSOFT_TENANT_ID'] ?? 

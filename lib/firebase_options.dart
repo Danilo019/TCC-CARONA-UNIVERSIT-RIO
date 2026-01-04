@@ -44,38 +44,38 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyD-gR7ZV9EkQKpfRUwPdnXyB4NLb7Kj8QM',
-    appId: '1:83995365801:web:23b104d813b51cdbc4f4b8',
-    messagingSenderId: '83995365801',
-    projectId: 'carona-universitiaria',
-    authDomain: 'carona-universitiaria.firebaseapp.com',
-    storageBucket: 'carona-universitiaria.firebasestorage.app',
+    apiKey: 'YOUR_FIREBASE_API_KEY_HERE',
+    appId: 'YOUR_FIREBASE_APP_ID_HERE',
+    messagingSenderId: 'YOUR_MESSAGING_SENDER_ID_HERE',
+    projectId: 'your-project-id',
+    authDomain: 'your-project-id.firebaseapp.com',
+    storageBucket: 'your-project-id.firebasestorage.app',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyD-gR7ZV9EkQKpfRUwPdnXyB4NLb7Kj8QM',
-    appId: '1:83995365801:android:23b104d813b51cdbc4f4b8',
-    messagingSenderId: '83995365801',
-    projectId: 'carona-universitiaria',
-    storageBucket: 'carona-universitiaria.firebasestorage.app',
+    apiKey: 'YOUR_FIREBASE_API_KEY_HERE',
+    appId: 'YOUR_FIREBASE_APP_ID_HERE',
+    messagingSenderId: 'YOUR_MESSAGING_SENDER_ID_HERE',
+    projectId: 'your-project-id',
+    storageBucket: 'your-project-id.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyD-gR7ZV9EkQKpfRUwPdnXyB4NLb7Kj8QM',
-    appId: '1:83995365801:ios:23b104d813b51cdbc4f4b8',
-    messagingSenderId: '83995365801',
-    projectId: 'carona-universitiaria',
-    storageBucket: 'carona-universitiaria.firebasestorage.app',
-    iosBundleId: 'com.carona.universitaria',
+    apiKey: 'YOUR_FIREBASE_API_KEY_HERE',
+    appId: 'YOUR_FIREBASE_APP_ID_HERE',
+    messagingSenderId: 'YOUR_MESSAGING_SENDER_ID_HERE',
+    projectId: 'your-project-id',
+    storageBucket: 'your-project-id.firebasestorage.app',
+    iosBundleId: 'com.your.app',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyD-gR7ZV9EkQKpfRUwPdnXyB4NLb7Kj8QM',
-    appId: '1:83995365801:ios:23b104d813b51cdbc4f4b8',
-    messagingSenderId: '83995365801',
-    projectId: 'carona-universitiaria',
-    storageBucket: 'carona-universitiaria.firebasestorage.app',
-    iosBundleId: 'com.carona.universitaria',
+    apiKey: 'YOUR_FIREBASE_API_KEY_HERE',
+    appId: 'YOUR_FIREBASE_APP_ID_HERE',
+    messagingSenderId: 'YOUR_MESSAGING_SENDER_ID_HERE',
+    projectId: 'your-project-id',
+    storageBucket: 'your-project-id.firebasestorage.app',
+    iosBundleId: 'com.your.app',
   );
 }
 

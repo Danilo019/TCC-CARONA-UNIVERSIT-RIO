@@ -50,3 +50,21 @@ app.*.map.json
 android/key.properties
 *.keystore
 *.jks
+
+# Arquivos de configuração com credenciais sensíveis
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+lib/firebase_options.dart
+.env
+.env.local
+.env.production
+.env.development
+
+# Credenciais Firebase
+firebase-adminsdk-*.json
+serviceAccountKey.json
+
+# Arquivos de configuração do backend
+backend/.env
+backend/serviceAccountKey.json
+backend/*-service-account.json

@@ -11,7 +11,7 @@ class MapsConfig {
   // https://console.cloud.google.com/google/maps-apis
   static String get apiKey =>
       dotenv.env['GOOGLE_MAPS_API_KEY'] ??
-      (kDebugMode ? 'AIzaSyDsdoPF0ImH-GjHmRUiCQx9S4sYx-qqMEc' : '');
+      '';
 
   // Configuração padrão do mapa
   static const double defaultZoom = 14.0;

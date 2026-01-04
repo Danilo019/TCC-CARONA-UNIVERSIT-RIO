@@ -44,7 +44,7 @@
         <!-- Google Maps API Key -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyDsdoPF0ImH-GjHmRUiCQx9S4sYx-qqMEc"/>
+            android:value="YOUR_GOOGLE_MAPS_API_KEY_HERE"/>
         <!-- Microsoft Authentication Activity -->
         <activity
             android:name="com.microsoft.identity.client.BrowserTabActivity"
